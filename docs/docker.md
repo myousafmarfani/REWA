@@ -2,9 +2,9 @@
 
 The repo ships a multi-stage `Dockerfile` (Next.js standalone output,
 runs as a non-root user) and a `docker-compose.yml` with a single
-`app` service. Supabase is external — point the app at your hosted
-(or self-hosted) Supabase project via env vars; no database container
-is included.
+`app` service. Supabase and Trigger.dev are external — point the app at
+your hosted (or self-hosted) Supabase project via env vars; no database
+container is included.
 
 ## Quick start
 
@@ -48,27 +48,22 @@ is included.
 docker build \
   --build-arg NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co \
   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key \
-  -t wacrm .
+  -t rewa .
 
-docker run -d --env-file .env.local -e PORT=3000 -p 3000:3000 wacrm
+docker run -d --env-file .env.local -e PORT=3000 -p 3000:3000 rewa
 ```
 
 ## Notes
 
 - Database migrations under `supabase/` are **not** run by the
-  container — apply them with the Supabase CLI as described in the
-  README.
-- Received attachments are copied into the `chat-media` Supabase
-  Storage bucket, because Meta deletes media roughly 30 days after it
-  arrives and the copy is the only thing that outlives that. It grows
-  with inbound volume, so it's worth watching your project's storage
-  quota. Turn it off per account under Settings → WhatsApp →
-  Attachment Storage; attachments received while it's off become
-  unviewable once Meta drops them. Files over 16 MB (the bucket's
-  limit) are never copied.
-- Nothing inside the container is scheduled. If you use automation
-  Wait steps or flows, point an external scheduler at
-  `GET /api/automations/cron` and `GET /api/flows/cron` on this
-  deployment, sending the shared secret in the `x-cron-secret` header
-  (`AUTOMATION_CRON_SECRET`, see `.env.local.example`). Both return
-  503 until that variable is set.
+  container — apply them with the Supabase CLI as described in
+  [README.md](./README.md). Do not replay the retired wacrm baseline in
+  `supabase/migrations/_wacrm_retired/`.
+- The rewa migration chain creates the private `contacts-exports` bucket
+  used by the scoring export. The container does not create or migrate
+  storage buckets.
+- Background agent and campaign work runs on Trigger.dev, not inside the
+  web container. Start a Trigger.dev worker separately.
+- Nothing inside the container is scheduled. If you add scheduled work,
+  run it through Trigger.dev or an external scheduler rather than
+  relying on an in-process cron.

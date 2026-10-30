@@ -1,23 +1,23 @@
 {
-  "name": "wacrm-mcp",
+  "name": "rewa-mcp-legacy",
   "version": "0.1.1",
-  "mcpName": "io.github.ArnasDon/wacrm-mcp",
-  "description": "Model Context Protocol (MCP) server for wacrm — drive your self-hosted WhatsApp CRM from Claude, Cursor, and other MCP clients.",
+  "private": true,
+  "description": "Legacy MCP server inherited from wacrm. Retained for reference only; it is not aligned with the current rewa schema or supported product surface.",
   "license": "MIT",
-  "author": "Arnas Donauskas",
-  "homepage": "https://github.com/ArnasDon/wacrm",
+  "author": "Arnas Donauskas (wacrm)",
+  "homepage": "https://github.com/myousafmarfani/REWA/tree/main/mcp-server",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ArnasDon/wacrm.git",
+    "url": "git+https://github.com/myousafmarfani/REWA.git",
     "directory": "mcp-server"
   },
   "keywords": [
     "mcp",
     "model-context-protocol",
+    "legacy",
     "wacrm",
     "whatsapp",
     "crm",
-    "claude",
     "ai"
   ],
   "type": "module",
@@ -25,7 +25,7 @@
     "node": ">=20.0.0"
   },
   "bin": {
-    "wacrm-mcp": "./dist/index.js"
+    "rewa-mcp-legacy": "./dist/index.js"
   },
   "files": [
     "dist",

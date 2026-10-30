@@ -8,28 +8,26 @@ body:
       value: |
         Thanks for the idea — but read this first.
 
-        This is a **template**, not a collaborative product. The
-        upstream scope is intentionally narrow, so most feature
-        requests end up as *"build this in your fork"* rather than
-        landing here. That's the point of a template.
+        rewa is developed spec-first against the approved architecture in
+        `MEMORY.md`, `AGENTS.md`, and `specs/`. The scope is deliberately
+        narrow: WhatsApp only, and the autonomous agent is the product.
 
-        When an upstream feature request *is* useful:
+        A feature request is most useful when it:
 
-        - It fixes a correctness problem in the template.
-        - It makes the template cleaner for the next forker (reducing
-          friction, removing footguns).
-        - It's in scope for "a generic WhatsApp CRM template" rather
-          than a bet on your specific workflow.
+        - Fixes a correctness, compliance, or data-isolation problem.
+        - Improves the autonomous agent's ability to handle real
+          conversations without inventing property facts.
+        - Fits the current delivery models (managed or white-label
+          single-tenant), not a deferred public multi-tenant SaaS.
 
-        If the feature is really for your own deployment, fork and
-        build it there — see
-        [CONTRIBUTING.md](https://github.com/ArnasDon/wacrm/blob/main/CONTRIBUTING.md).
+        Read [CONTRIBUTING.md](https://github.com/myousafmarfani/REWA/blob/main/CONTRIBUTING.md)
+        before proposing implementation work.
 
   - type: textarea
     id: problem
     attributes:
       label: What's the problem?
-      description: What are you trying to do today that the template makes harder than it should?
+      description: What are you trying to do today that rewa makes harder than it should?
       placeholder: |
         When a broadcast ends I have no way to see which recipients
         didn't reply so I can follow up manually.

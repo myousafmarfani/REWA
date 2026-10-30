@@ -1,12 +1,32 @@
-# Public API (`/api/v1`)
+# Public API (`/api/v1`) — inherited, legacy
 
-The public API lets you drive your wacrm instance from your own
+> **Inherited wacrm documentation. Not a supported rewa contract.**
+>
+> The `/api/v1` surface was inherited with the wacrm fork. Parts of it
+> have been adapted to the rewa `client_id` schema, but this document has
+> not been verified against the current code and still describes retired
+> wacrm concepts. In particular:
+>
+> - `tags`, `contact_tags`, and `company` are retired; rewa contacts use
+>   `full_name` / `phone_e164`.
+> - `webhook_endpoints` is retired wacrm code and is not part of the rewa
+>   migration chain.
+> - API keys and account scoping still carry inherited names in the code
+>   (including the `wacrm_live_` prefix) and have not been rebranded.
+>
+> Treat this page as reference material only. It is not part of the
+> supported rewa product surface yet, and no compatibility guarantee is
+> made. The authoritative setup path is [README.md](./README.md).
+
+The inherited public API lets you drive the instance from your own
 scripts and automations — send messages, manage contacts, launch
 broadcasts — without going through the dashboard UI.
 
-> **Status:** stable. Authentication, scopes, rate limiting, the
-> messages / contacts / conversations / broadcasts endpoints, and
-> outbound event [webhooks](#webhooks) all ship now.
+> **Original status line (inherited):** "stable. Authentication, scopes,
+> rate limiting, the messages / contacts / conversations / broadcasts
+> endpoints, and outbound event [webhooks](#webhooks) all ship now." That
+> claim applies to the upstream wacrm project, not to the current rewa
+> tree.
 
 ## Authentication
 

@@ -60,6 +60,11 @@ jobs:
       # migration ran in filename order against nothing. It fails on the
       # first statement Postgres rejects. --no-seed because there is no
       # seed script and this is about schema, not data.
+      #
+      # The retired wacrm baseline lives in
+      # supabase/migrations/_wacrm_retired/ — a subdirectory, so it is
+      # not part of the rewa chain and is NOT replayed here. Do not move
+      # those files back into supabase/migrations/.
       - name: Replay every migration from scratch
         run: supabase db reset --local --no-seed
 

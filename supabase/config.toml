@@ -11,7 +11,7 @@
 # duplicated into a second source of truth that would quietly drift.
 # Run `supabase init` if you ever want the CLI's full annotated
 # reference version of this file.
-project_id = "wacrm"
+project_id = "rewa"
 
 [db]
 port = 54322

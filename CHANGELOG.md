@@ -1,13 +1,63 @@
 # Changelog
 
-User-visible changes in `wacrm`. Self-hosters: when pulling an update,
-check this file for any **migration required** notes and apply the
-matching SQL files from `supabase/migrations/` against your Supabase
-project before restarting the app.
+rewa is an independent project forked from wacrm. This file keeps both
+histories, separated so inherited upstream changes are not mistaken for
+rewa releases:
+
+- **rewa development** — changes made in this repository.
+- **WACRM (inherited history)** — the original upstream entries,
+  retained for attribution and context. Migration paths in those entries
+  refer to the retired `_wacrm_retired/` baseline and must **not** be
+  applied to a rewa environment.
 
 Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
-and polish.
+
+## [Unreleased] — rewa development
+
+### Added
+
+- Client-scoped data model and RLS foundation for rewa (spec 1).
+- TypeScript contact cleaning and import pipeline, preserving the
+  original validation and deduplication edge cases (spec 2).
+- Autonomous inbound agent: hard `human_controlled`/`opted_out`/window
+  gates, conversation history, pgvector property retrieval, guardrails,
+  persona-driven generation, persistence, and sending (spec 3).
+- WhatsApp sending pipeline with campaign fan-out, template state, rate
+  limiting, and 24-hour window enforcement (spec 4).
+- Lead scoring, score history, hot-lead escalation by push/email, and
+  CSV/Excel export (spec 5).
+- rewa pipeline UI adaptations: lead-score badges, hot-lead indicators,
+  chat-header agent toggle, campaigns, and property management (spec 6).
+- Deterministic opt-out fast path with unit tests, plus property
+  embedding ingestion and retrieval.
+
+### Changed
+
+- Replaced inherited wacrm branding in package metadata, app metadata,
+  README, contributing guide, and setup documentation.
+- Retired the wacrm baseline migrations (`001`–`039`) to
+  `supabase/migrations/_wacrm_retired/`. The rewa migration chain is
+  authoritative.
+- Marked the inherited MCP server and public API documentation as
+  legacy; neither is part of the supported rewa surface yet.
+- Preserved the original MIT license and upstream attribution.
+
+### Migration warning
+
+- Do **not** replay the retired wacrm baseline or recreate its tables on
+  a rewa environment. See `MEMORY.md` entry 19.
+- CI validates the rewa schema with `supabase/ci/verify-schema.sql`; a
+  clean migration replay is not sufficient on its own because the SQL is
+  idempotency-guarded.
+
+---
+
+# WACRM (inherited history)
+
+The entries below are the original wacrm release history. They are
+historical only in this repository: the referenced migration files now
+live under `supabase/migrations/_wacrm_retired/` and are not applied to
+rewa. See the rewa section above for the current migration chain.
 
 ## [0.8.1] — 2026-07-10
 

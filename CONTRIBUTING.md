@@ -1,124 +1,103 @@
-# Using this template
+# Contributing to rewa
 
-This is a **template repository**, not a collaborative product. The
-expected flow is:
+rewa is developed spec-first. It is not a public template and it is not
+an open-ended feature playground. Changes should follow the approved
+architecture and the relevant build spec.
 
-1. **Fork** it to your own GitHub account or organisation.
-2. **Deploy** the fork — see [`docs/`](./docs/README.md).
-3. **Customise** your fork. Rebrand, add the features you need, remove
-   the ones you don't, swap hosting, change the schema.
+## Before changing behaviour
 
-You **don't** need to send changes back upstream. The fact that your
-fork diverges is the whole point — the upstream is deliberately
-opinionated about stack, UX, and scope, and your fork is where those
-opinions become yours.
+1. Read [`MEMORY.md`](./MEMORY.md) — the numbered architecture decision
+   ledger. It is authoritative over every other document.
+2. Read [`AGENTS.md`](./AGENTS.md) — scope, stack, agent rules, and
+   subagent review gates.
+3. Read the relevant spec in [`specs/`](./specs). The build order is:
+   data model → cleaning → agent core → sending → scoring → pipeline UI.
+4. Load the matching skill in `.opencode/skills/` when the change touches
+   cleaning rules, messaging compliance, real-estate domain behaviour, or
+   the agent layer.
 
-## Fork and run
+If a change conflicts with a numbered `MEMORY.md` entry, stop and raise
+it. Do not silently resolve the conflict in code.
+
+## Development setup
 
 ```bash
-# 1. Fork on GitHub: https://github.com/ArnasDon/wacrm → Fork
-# 2. Clone your fork
-git clone https://github.com/<your-username>/wacrm.git
-cd wacrm
-
-cp .env.local.example .env.local   # fill in Supabase + Meta creds
+git clone https://github.com/myousafmarfani/REWA.git
+cd REWA
 npm install
+cp .env.local.example .env.local
 npm run dev
 ```
 
-Full setup (Supabase migrations, WhatsApp Business API, deploy) lives in
-[`docs/`](./docs/README.md).
+Setup details, including Supabase, WhatsApp, and Trigger.dev, are in
+[`docs/README.md`](./docs/README.md).
 
-## Keeping your fork up to date
+## Checks before opening a pull request
 
-Pull in upstream bug fixes and security patches periodically:
+Run all of these locally:
 
 ```bash
-git remote add upstream https://github.com/ArnasDon/wacrm.git  # once
-git fetch upstream
-git checkout main
-git merge upstream/main     # or: git rebase upstream/main
-# Resolve any conflicts (likely in areas you've customised), then push
-git push origin main
+npm run typecheck
+npm run lint
+npm run test
+npm run build
 ```
 
-If you've made heavy local customisations, rebasing can surface
-conflicts every time you pull. Pinning to a specific upstream tag and
-updating on your schedule is a valid alternative.
+Database changes must also replay cleanly and pass the schema assertion.
+The CI workflow does this automatically, but you can run the same checks
+with the Supabase CLI:
 
-## Reporting bugs in the upstream template
+```bash
+supabase db reset --local --no-seed
+supabase db query --local --file supabase/ci/verify-schema.sql
+```
 
-If you find a bug in the upstream code — not one you introduced in your
-fork — please file it using the
-[bug report](https://github.com/ArnasDon/wacrm/issues/new?template=bug_report.yml)
-template. Including the commit SHA, the runtime (Hostinger / Vercel /
-local / other), and logs will get to a fix fastest.
+### Migration rules
 
-## Reporting security issues
+- The rewa migration chain is authoritative. The inherited wacrm baseline
+  in `supabase/migrations/_wacrm_retired/` is retired and must not be
+  replayed.
+- Do not recreate retired wacrm tables on a rewa environment. See
+  `MEMORY.md` entry 19.
+- New migrations must be idempotent and must be added to the CI schema
+  assertion when they create a required object.
 
-**Do not file security issues publicly.** Follow the private flow in
-[SECURITY.md](./.github/SECURITY.md).
+## Scope rules
 
-## Upstream pull requests
+- **WhatsApp only.** Do not add Telegram or Email sending logic, stubs,
+  schema columns, or provider clients.
+- **No public multi-tenant SaaS.** Model C is deferred. Do not add public
+  signup, cross-tenant billing, or sharing assumptions beyond the
+  supported managed/white-label models.
+- **The agent is autonomous.** Do not add a draft-and-approve step to the
+  normal inbound flow.
+- **Every property fact is grounded.** Do not let the agent invent
+  prices, availability, or payment plans.
 
-Not the primary flow, but welcome in specific cases:
+## Pull requests
 
-- **Security fixes** — always welcome, please follow SECURITY.md first
-  for disclosure.
-- **Bug fixes** that match upstream intent (crash, correctness,
-  documentation errors, typos) — land quickly.
-- **Small improvements** (accessibility, obvious UX nits) — usually
-  welcome, open an issue first to check alignment.
+- Branch from the latest `main`; do not push to a merged branch.
+- Keep one logical change per pull request.
+- Explain the **why** in the commit body and the **what/how to verify**
+  in the pull request.
+- Include the migration impact and any behaviour change for existing
+  deployments.
+- Use the pull request template.
 
-Less likely to land:
+## Reporting bugs and security issues
 
-- **New features.** The template's scope is intentionally narrow. A
-  "great idea for a CRM" is often a great idea for *your* CRM — i.e.
-  your fork — but would dilute the template for the next forker.
-- **Stack changes** (different ORM, different UI kit, different auth
-  provider). These belong in a fork, not upstream.
-- **Opinionated refactors** without a concrete correctness or
-  performance motivation.
+- File non-security bugs with the
+  [bug report](https://github.com/myousafmarfani/REWA/issues/new?template=bug_report.yml)
+  template. Include the commit SHA, runtime, and relevant logs.
+- **Do not file security issues publicly.** Follow the private flow in
+  [`.github/SECURITY.md`](./.github/SECURITY.md).
 
-If you do send a PR, the usual rules apply:
+## License and attribution
 
-- Branch off the latest `main` (don't push to a merged branch — commits
-  end up orphaned).
-- Run `npm run typecheck` and `npm run format` locally first.
-- Fill in the PR template, especially the **Test plan**.
-- One logical change per PR.
-- Commit-message first line is imperative + terse; the body explains
-  the *why*, the diff shows the *what*.
+rewa is MIT-licensed. The original MIT [`LICENSE`](./LICENSE) and its
+copyright notice are preserved unchanged.
 
-Expect a review within a few days. PRs opened without an issue may be
-closed — open the issue first to align.
-
-## If you maintain a public fork
-
-- Rebrand. The "CRM Template for WhatsApp" name, favicon, and
-  `wacrm.tech` URL belong to the upstream project; please swap them
-  for your own before putting your deployment in front of users.
-- Keep the MIT [`LICENSE`](./LICENSE) file — that's how the template's
-  permissions travel with the code. Attribution in a `README` section
-  is appreciated but not required.
-- You are free to re-license additions to your fork however you like.
-
-## Dev-loop reference
-
-Even if you never send a PR upstream, these are the scripts you'll use
-in your fork:
-
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Turbopack dev server on port 3000. |
-| `npm run build` | Production build. Next also runs its own typecheck here. |
-| `npm run typecheck` | `tsc --noEmit`. Fast TS-only pass. |
-| `npm run lint` | ESLint. |
-| `npm run format` | Prettier write. |
-| `npm run format:check` | Prettier in check-only mode. Useful in CI. |
-
-## Licensing
-
-This template is MIT ([`LICENSE`](./LICENSE)). Anything you contribute
-upstream is assumed to be MIT too. Your fork's additions are yours to
-license however you like.
+rewa was forked from [wacrm](https://github.com/ArnasDon/wacrm), an
+MIT-licensed CRM template by Arnas Donauskas. Contributions to rewa are
+accepted under the repository's MIT license. Upstream attribution must
+not be removed from the license or historical records.

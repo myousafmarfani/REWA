@@ -1,175 +1,204 @@
-# wacrm — CRM Template for WhatsApp
+# rewa
 
-> Self-hostable CRM template for WhatsApp® — shared inbox, contacts,
-> sales pipelines, broadcasts, and no-code automations. Fork it, brand
-> it, host it.
+**AI-native WhatsApp outreach and CRM for real estate.**
 
-<p align="center">
-  <a href="https://www.hostinger.com/web-apps-hosting?REFERRALCODE=WACRMHOST">
-    <img src="./.github/assets/hostinger-deploy.png" alt="Ship your Node.js app in one click — Deploy to Hostinger" width="900">
-  </a>
-</p>
+rewa is not a CRM with an AI assistant bolted on. The autonomous agent
+is the product. It handles inbound WhatsApp conversations end to end:
+reads the full history, retrieves property facts from pgvector, runs
+guardrails, replies in a named human persona, scores the lead, and
+escalates hot leads to a human — with no draft-and-approve step in the
+normal flow.
 
+> **Status: active development, pre-release.** WhatsApp only. The core
+> specs (data model, contact cleaning, agent core, sending, scoring,
+> and pipeline UI) are implemented in this tree, but rewa is not yet a
+> production deployment. Treat this repository as a working system
+> under active development, not a finished hosted product.
+
+[![CI](https://github.com/myousafmarfani/REWA/actions/workflows/ci.yml/badge.svg)](https://github.com/myousafmarfani/REWA/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
-[![CI](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml/badge.svg)](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e?logo=supabase)](https://supabase.com)
-[![Stars](https://img.shields.io/github/stars/ArnasDon/wacrm?style=social)](https://github.com/ArnasDon/wacrm/stargazers)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)](https://www.typescriptlang.org)
 
-The marketing site and self-host docs live in a separate repo:
-[ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)
-([wacrm.tech](https://wacrm.tech)). This repo is the product —
-clone or fork it to run your own CRM.
+---
 
-## What you get out of the box
+## What rewa does
 
-- **Shared inbox** on the official WhatsApp Business API — multiple
-  agents working one number, per-conversation assignment, status, and
-  notes.
-- **Contacts + tags + custom fields**, CSV import, deduplication.
-- **Sales pipelines** (Kanban) with deals linked to conversations.
-- **Broadcasts** with Meta-approved templates, delivery + read
-  tracking, per-recipient variable substitution.
-- **No-code automations** — triggers on inbound messages, new
-  contacts, keywords, or schedule; conditional branches, waits,
-  tags, webhooks. Visual builder.
-- **AI reply assistant** — bring your own OpenAI or Anthropic key
-  (stored encrypted; no per-seat AI fee, your data stays yours).
-  One-click AI-drafted replies in the inbox, plus an optional
-  auto-reply bot with a per-conversation cap and clean human handoff.
-  Add a **knowledge base** (FAQs, policies, product docs) and it
-  answers from your own content — hybrid retrieval (Postgres full-text,
-  or semantic pgvector when an embeddings key is set).
-- **Real-time dashboard** — response times, daily volume, pipeline
-  value, cross-module activity feed.
-- **Team accounts** — invite teammates by link, role-based access
-  (owner / admin / agent / viewer), ownership transfer. Every install
-  is account-scoped, so one shared inbox can be staffed by a whole
-  team. Solo use stays single-user with zero setup.
-- **Account management** — email, password, avatar, global sign-out.
-- **Public REST API** (`/api/v1`) with scoped, revocable API keys —
-  build your own automations on top of your CRM. See
-  [docs/public-api.md](./docs/public-api.md).
-- **MCP server** — drive your CRM from Claude, Cursor, and other AI
-  assistants over the [Model Context Protocol](https://modelcontextprotocol.io).
-  Read-only by default, opt-in writes. See [docs/mcp.md](./docs/mcp.md)
-  (server in [`mcp-server/`](./mcp-server)).
+rewa joins two systems that usually live apart:
 
-## Why fork this?
+- **Upstream — list to conversation.** Contact cleaning and import
+  (Excel/CSV), WhatsApp campaign sending, template management, and
+  delivery tracking.
+- **Downstream — conversation to close.** A shared inbox, Kanban
+  pipeline, live lead scoring, hot-lead escalation, and the autonomous
+  agent that owns inbound replies.
 
-This is a **template**, not a product. Forking means you get:
+The agent works like a human sales agent. Contacts do not get an AI
+disclosure, an AI label, or a different voice. The persona is named and
+configured per client. Every property fact it states — price, floor,
+availability, payment plan — must come from retrieved pgvector data. If
+the answer is not in the vector store, it says it will check and follow
+up; it never invents property data.
 
-- **Full ownership** — your code, your Supabase project, your domain,
-  your data. No SaaS lock-in, no seat pricing, no trust dance.
-- **Full customisation** — add the fields your team needs, remove the
-  modules you don't, redesign anything. The stack is boring on
-  purpose (Next.js + Supabase + Tailwind) so the learning curve is
-  short.
-- **Zero ops to start** — [Hostinger](https://www.hostinger.com/web-apps-hosting?REFERRALCODE=WACRMHOST)
-  Managed Node.js deploys a fork in a few clicks. No Docker, no
-  Kubernetes, no infra team needed.
-  ([See below ↓](#-deploy-on-hostinger-recommended))
-- **Real security primitives** — token encryption (AES-256-GCM), RLS
-  on every table, HMAC-verified webhooks, CSP, rate limiting, CI
-  typecheck/build on every PR.
+## How an inbound message is handled
 
-Not a framework. Not an SDK. A concrete, working CRM you can stand up
-in an afternoon and make yours.
+1. **Hard gates.** `human_controlled`, then `opted_out`, then the
+   24-hour service window are checked before any agent work. These are
+   database gates, not prompt instructions.
+2. **Deterministic opt-out.** Unsubscribe phrasing is matched before
+   guardrails can fire, so a "stop" is honoured even when the message
+   would otherwise be blocked as out of scope.
+3. **History and retrieval.** The conversation is loaded and the
+   relevant property chunks are retrieved from pgvector.
+4. **Guardrails.** Scope, tone, safety, identity probes, and factual
+   grounding are checked as a separate step before generation.
+5. **Generation and send.** The agent writes the reply and sends it
+   through the WhatsApp Cloud API.
+6. **Scoring and escalation.** The lead score updates after the
+   exchange. A hot lead is flagged in the UI, pushed to the assigned
+   human, and emailed from the platform sender before the outbound
+   reply is attempted.
 
-## Quick start
+## Current capabilities
+
+- **Contact cleaning** — TypeScript port of the original pipeline:
+  E.164 normalisation, exact and near-duplicate detection, region
+  classification, priority sorting, and import to Supabase.
+- **Autonomous agent** — persona configuration, pgvector retrieval,
+  guardrails, structured output, deterministic opt-out, and hard
+  `human_controlled` gates.
+- **WhatsApp sending** — official Cloud API, campaign fan-out, template
+  approval state, rate limiting, and 24-hour window enforcement.
+- **Lead scoring** — cold/warm/hot scoring, score history, pipeline
+  stage updates, CSV/Excel export, and hot-lead escalation by push and
+  email.
+- **Pipeline UI** — conversation inbox, Kanban pipeline, lead-score
+  badges, hot-lead indicators, campaign management, and the chat-header
+  agent toggle.
+- **Property context** — pgvector ingestion and retrieval for grounded
+  property answers.
+
+### Deliberately out of scope
+
+- **Telegram and Email.** rewa is WhatsApp-only. Do not add schema
+  columns, stubs, or sending logic for either channel.
+- **Public multi-tenant signup.** Model C is deferred. The supported
+  delivery models are a managed, RLS-isolated service and white-label
+  single-tenant self-hosting.
+
+## Architecture
+
+| Layer            | Choice                                                     |
+| ---------------- | ---------------------------------------------------------- |
+| App              | Next.js 16 (App Router), React 19, TypeScript, Tailwind v4 |
+| Data             | Supabase — Postgres, Auth, RLS, Storage, pgvector          |
+| Agent            | Vercel AI SDK, provider-agnostic model configuration       |
+| Background jobs  | Trigger.dev                                                |
+| WhatsApp         | Meta WhatsApp Business Cloud API                           |
+| Phone validation | `libphonenumber-js`                                        |
+| Email alerts     | Resend                                                     |
+| Push alerts      | Web Push (VAPID)                                           |
+| Tests            | Vitest                                                     |
+
+The database is the single source of truth. There are no file-based
+handoffs between modules. Contact imports, campaign sends, agent
+replies, and exports all read and write Supabase.
+
+### Repository layout
+
+```text
+src/
+  app/                 Next.js routes and dashboard pages
+  components/rewa/     rewa-specific UI (lead score, agent toggle)
+  lib/agent/           gates, history, retrieval, guardrails, generation
+  lib/cleaning/        contact cleaning and import
+  lib/compliance/      opt-out fast path
+  lib/scoring/         scoring, escalation, export
+  lib/sending/         WhatsApp send core and rate limiting
+  trigger/             Trigger.dev background tasks
+specs/                 dependency-ordered build specs 1–6
+supabase/migrations/   authoritative rewa migration chain
+supabase/migrations/_wacrm_retired/   retired wacrm baseline (do not replay)
+```
+
+## Getting started
 
 ```bash
-# Fork on GitHub first: https://github.com/ArnasDon/wacrm → Fork
-git clone https://github.com/<your-username>/wacrm.git
-cd wacrm
+git clone https://github.com/myousafmarfani/REWA.git
+cd REWA
 npm install
-cp .env.local.example .env.local   # fill in Supabase + Meta creds
+cp .env.local.example .env.local
 npm run dev
 ```
 
-Open <http://localhost:3000>. You'll be redirected to `/login` (or
-`/dashboard` if already signed in).
+You also need a Supabase project, a Meta WhatsApp app, and a Trigger.dev
+project. The full setup path is in **[docs/README.md](./docs/README.md)**.
 
-Prefer containers? See [docs/docker.md](./docs/docker.md) for the
-Dockerfile + Docker Compose setup.
+Useful commands:
 
-## 🚀 Deploy on Hostinger (recommended)
+| Command             | What it does                    |
+| ------------------- | ------------------------------- |
+| `npm run dev`       | Development server on port 3000 |
+| `npm run build`     | Production build                |
+| `npm run lint`      | ESLint                          |
+| `npm run typecheck` | `tsc --noEmit`                  |
+| `npm run test`      | Vitest                          |
+| `npm run format`    | Prettier                        |
 
-<p align="center">
-  <a href="https://www.hostinger.com/web-apps-hosting?REFERRALCODE=WACRMHOST">
-    <img src="./.github/assets/hostinger-deploy.png" alt="Ship your Node.js app in one click — Deploy to Hostinger" width="1000">
-  </a>
-</p>
-<p align="center">
-  <a href="https://wacrm.tech/docs/deployment-hostinger">
-    <img src="https://img.shields.io/badge/Step--by--step_guide-wacrm.tech%2Fdocs-111?style=for-the-badge" alt="Step-by-step guide" height="44">
-  </a>
-</p>
+### Migration warning
 
-**wacrm is built to run on [Hostinger](https://www.hostinger.com/web-apps-hosting?REFERRALCODE=WACRMHOST).**
-It's the path we test, document, and recommend — and the fastest way
-to get a production-grade CRM live without owning a VPS or a
-Kubernetes cluster.
+The inherited wacrm baseline (migrations `001`–`039`) is **retired** and
+lives in `supabase/migrations/_wacrm_retired/`. It is not part of the
+rewa chain. The authoritative migrations are:
 
-### Why Hostinger?
+```text
+20260824000000_data_model_spec1.sql
+20260824000001_agent_core_spec3.sql
+20260824000002_auth_bridge.sql
+20260920000000_sending_spec4.sql
+20260922000000_scoring_spec5.sql
+20260923000000_drop_auth_bridge_views.sql
+20261016000000_touch_presence_stub.sql
+```
 
-| | |
-|---|---|
-| **One-click Git deploy** | Connect your fork, push to `main`, Hostinger builds and ships it. No SSH, no Docker, no CI to wire up — this repo's own `main` deploys this way. |
-| **Managed Node.js** | Next.js 16 (App Router, server actions, ISR) runs out of the box on [Premium, Business, and Cloud](https://www.hostinger.com/web-apps-hosting?REFERRALCODE=WACRMHOST) shared plans. You don't manage Node versions, processes, or reverse proxies. |
-| **Free SSL + free domain** | Automatic Let's Encrypt on your custom domain (or a free one included with annual plans). HTTPS is on by default — required for the WhatsApp Business webhook. |
-| **Global CDN + LiteSpeed** | Static assets cached at the edge, dynamic routes served from LiteSpeed. Snappy dashboards out of the box, no Cloudflare setup required. |
-| **Env vars + logs in hPanel** | Set `SUPABASE_*`, `WHATSAPP_*`, and `ENCRYPTION_KEY` from the panel — no `.env` on the server. Live application logs in the same UI. |
-| **DDoS protection + daily backups** | Built-in, no add-ons. The webhook endpoint is a public target — having protection at the edge matters. |
-| **Cheaper than a VPS** | Plans start at a few dollars a month — order-of-magnitude less than a comparable managed Node.js host, and you don't pay extra for the database (that's Supabase). |
-| **24/7 human support** | Live chat support in 20+ languages — useful when your CRM is the thing your team relies on to talk to customers. |
-
-### The 60-second version
-
-1. **Fork** this repo on GitHub.
-2. In **hPanel → Websites → Create**, pick **Node.js** and connect
-   your fork.
-3. Paste your Supabase + Meta env vars into hPanel.
-4. Push to `main`. Hostinger builds and serves it. Done.
-
-Full walkthrough with screenshots:
-**[wacrm.tech/docs/deployment-hostinger](https://wacrm.tech/docs/deployment-hostinger)**.
-
-> _Note: wacrm is MIT-licensed and runs anywhere Node.js does
-> (Vercel, Railway, your own VPS). Hostinger is recommended, not
-> required._
+Do **not** replay the retired wacrm baseline, and do not recreate its
+tables (`whatsapp_config`, `accounts`, `broadcasts`, `flows`,
+`automations`, `tags`, `contact_tags`, `custom_fields`, `api_keys`,
+`webhook_endpoints`) on a rewa environment. The CI migration check
+(`supabase/ci/verify-schema.sql`) asserts the rewa schema only. See
+`MEMORY.md` entry 19 for the full background and remaining cleanup.
 
 ## Documentation
 
-Full self-host documentation — Supabase migrations, WhatsApp Business
-API config, and production deploy — lives at
-**[wacrm.tech/docs](https://wacrm.tech/docs)**
-(source: [ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)).
+- [Setup and operations](./docs/README.md)
+- [Docker](./docs/docker.md)
+- [Public API (inherited, legacy)](./docs/public-api.md)
+- [MCP server (inherited, legacy)](./docs/mcp.md)
+- [Build specs](./specs)
+- [Architecture decision ledger](./MEMORY.md)
+- [Agent instructions](./AGENTS.md)
 
-Key pages:
-- [Getting started](https://wacrm.tech/docs/getting-started)
-- [Supabase setup](https://wacrm.tech/docs/supabase-setup)
-- [WhatsApp setup](https://wacrm.tech/docs/whatsapp-setup)
-- [Environment variables](https://wacrm.tech/docs/environment-variables)
-- [Deploy on Hostinger](https://wacrm.tech/docs/deployment-hostinger)
-- [Architecture](https://wacrm.tech/docs/architecture)
-- [Troubleshooting](https://wacrm.tech/docs/troubleshooting)
-
-## Stack
-
-- **App** — Next.js 16 (App Router), React 19, TypeScript, Tailwind v4.
-- **Data** — Supabase (Postgres + Auth + Storage + RLS).
-- **WhatsApp** — Meta Cloud API (official WhatsApp Business API).
+The public API and MCP server docs describe inherited wacrm surfaces.
+They are retained for reference and are not part of the supported rewa
+product surface yet. See the legacy notices in each document before
+relying on them.
 
 ## Contributing
 
-This is a template, not a collaborative product — the expected flow is
-fork → customise → deploy, **not** upstream contribution. Bug reports
-and security issues are welcome; feature PRs often belong in your fork
-rather than here. Details in
-[`CONTRIBUTING.md`](./CONTRIBUTING.md) and
-[`.github/SECURITY.md`](./.github/SECURITY.md).
+rewa is developed spec-first. Read `MEMORY.md`, `AGENTS.md`, and the
+relevant spec before changing behaviour. See
+[CONTRIBUTING.md](./CONTRIBUTING.md).
 
-## License
+## License and lineage
 
-[MIT](./LICENSE). Fork it, brand it, host it.
+rewa is MIT-licensed. The original MIT [`LICENSE`](./LICENSE) and its
+copyright notice are preserved unchanged.
+
+rewa builds on [wacrm](https://github.com/ArnasDon/wacrm), an
+MIT-licensed CRM template for WhatsApp by Arnas Donauskas. The app shell
+and parts of the shared inbox/pipeline were forked from that project;
+the rewa branding, data model, cleaning pipeline, autonomous agent,
+sending pipeline, scoring, and product direction are independent work.
+The inherited upstream history is preserved in
+[`CHANGELOG.md`](./CHANGELOG.md) and the retired migration baseline.

@@ -1,28 +1,30 @@
 {
-  "name": "wacrm",
+  "name": "rewa",
   "version": "0.8.0",
   "private": true,
-  "description": "Self-hostable CRM template for WhatsApp built on Next.js and Supabase — shared inbox, contacts, sales pipelines, broadcasts, and no-code automations.",
+  "description": "AI-native WhatsApp outreach and CRM for real estate — autonomous property consultation agent, contact cleaning, campaigns, lead scoring, and pipeline.",
   "license": "MIT",
-  "author": "Arnas Donauskas",
-  "homepage": "https://github.com/ArnasDon/wacrm",
+  "author": "rewa contributors",
+  "homepage": "https://github.com/myousafmarfani/REWA",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ArnasDon/wacrm.git"
+    "url": "git+https://github.com/myousafmarfani/REWA.git"
   },
   "bugs": {
-    "url": "https://github.com/ArnasDon/wacrm/issues"
+    "url": "https://github.com/myousafmarfani/REWA/issues"
   },
   "keywords": [
-    "crm",
+    "real-estate",
     "whatsapp",
     "whatsapp-business-api",
+    "ai-agent",
+    "crm",
+    "lead-scoring",
+    "pgvector",
     "nextjs",
     "supabase",
-    "automation",
-    "broadcast",
-    "self-hosted",
-    "template"
+    "trigger-dev",
+    "typescript"
   ],
   "engines": {
     "node": ">=20.0.0"

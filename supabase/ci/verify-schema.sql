@@ -13,7 +13,7 @@
 -- would just be the migrations restated in a second place, drifting.
 --
 -- MEMORY entry 19: the wacrm baseline (001–039) was retired to
--- supabase/migrations/_wacrm_retired/ and is NOT replayed. The five rewa
+-- supabase/migrations/_wacrm_retired/ and is NOT replayed. The rewa
 -- migrations are the authoritative chain, so assert rewa objects only —
 -- no whatsapp_config / accounts / broadcasts / flows / automations /
 -- deals / chat-media / flow-media.
