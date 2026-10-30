@@ -9,21 +9,22 @@
 //
 // It deliberately reuses the exact find-or-create logic the inbound
 // webhook uses (the `findExistingContact` dedupe helper, the
-// one-conversation-per-(account, contact) convention, the
-// account_id-tenancy / user_id-audit split) so a contact created via
-// the API is indistinguishable from one created by an inbound message.
+// one-conversation-per-(client, contact) convention) so a contact
+// created via the API is indistinguishable from one created by an
+// inbound message.
 //
-// Audit user: created rows need a NOT NULL `user_id`. As with the
-// webhook (where there's no logged-in human either), we attribute
-// them to the WhatsApp config owner — a stable account-level default.
+// Rewired to the rewa schema (MEMORY.md entry 19): tenancy is
+// `client_id`, the stored number is `contacts.phone_e164`, the label is
+// `contacts.full_name`, WhatsApp credentials live on `client_config`
+// (not `whatsapp_config`), and there is no audit `user_id` on contacts
+// or conversations — so no audit attribution is needed here.
 // ============================================================
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
-import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
+import { isValidE164, toE164 } from '@/lib/whatsapp/phone-utils';
 import { SendMessageError } from '@/lib/whatsapp/send-message';
-import { resolveAuditUserId, ContactError } from '@/lib/api/v1/contacts';
 
 export interface ResolvedConversation {
   conversationId: string;
@@ -34,18 +35,18 @@ export interface ResolvedConversation {
 
 /**
  * Find or create the contact + conversation for `phone` within
- * `accountId`. Throws `SendMessageError` (shared with the send core,
+ * `clientId`. Throws `SendMessageError` (shared with the send core,
  * so the route maps one error family) on a bad phone, a missing
  * WhatsApp config, or a DB failure.
  */
 export async function resolveConversationByPhone(
   db: SupabaseClient,
-  accountId: string,
+  clientId: string,
   phone: string,
   name?: string | null
 ): Promise<ResolvedConversation> {
-  const sanitized = sanitizePhoneForMeta(phone);
-  if (!isValidE164(sanitized)) {
+  const phoneE164 = toE164(phone);
+  if (!isValidE164(phoneE164)) {
     throw new SendMessageError(
       'bad_request',
       "'to' must be a valid phone number in E.164 format (e.g. +14155550123)",
@@ -53,14 +54,15 @@ export async function resolveConversationByPhone(
     );
   }
 
-  // Fail fast (and create nothing) when the account has no WhatsApp
-  // connected — the same error the send would raise anyway.
+  // Fail fast (and create nothing) when the client has no WhatsApp
+  // connected — the same error the send would raise anyway. rewa holds
+  // these on client_config (see src/trigger/send-campaign.ts).
   const { data: config } = await db
-    .from('whatsapp_config')
-    .select('id')
-    .eq('account_id', accountId)
+    .from('client_config')
+    .select('wa_phone_number_id, wa_access_token')
+    .eq('client_id', clientId)
     .maybeSingle();
-  if (!config) {
+  if (!config?.wa_phone_number_id || !config.wa_access_token) {
     throw new SendMessageError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
@@ -68,52 +70,36 @@ export async function resolveConversationByPhone(
     );
   }
 
-  // Audit user for created rows = the single account-wide default used
-  // by every public-API write (see resolveAuditUserId), so a contact
-  // created here is attributed identically to one created via
-  // POST /api/v1/contacts. resolveAuditUserId throws ContactError only
-  // if the owner can't be resolved — remap it to the send error family
-  // the callers already handle.
-  let ownerUserId: string;
-  try {
-    ownerUserId = await resolveAuditUserId(db, accountId);
-  } catch (err) {
-    if (err instanceof ContactError) {
-      throw new SendMessageError('db_error', err.message, err.status);
-    }
-    throw err;
-  }
-
   // ---- contact -------------------------------------------------
   let contactId: string;
   let contactCreated = false;
 
-  const existing = await findExistingContact(db, accountId, sanitized);
+  const existing = await findExistingContact(db, clientId, phoneE164);
   if (existing) {
     contactId = existing.id;
     if (name && name !== existing.name) {
       await db
         .from('contacts')
-        .update({ name, updated_at: new Date().toISOString() })
+        .update({ full_name: name, updated_at: new Date().toISOString() })
         .eq('id', existing.id);
     }
   } else {
     const { data: created, error: createErr } = await db
       .from('contacts')
       .insert({
-        account_id: accountId,
-        user_id: ownerUserId,
-        phone: sanitized,
-        name: name || sanitized,
+        client_id: clientId,
+        phone_e164: phoneE164,
+        full_name: name || phoneE164,
       })
       .select('id')
       .single();
 
     if (createErr || !created) {
       // Lost a race against a concurrent inbound/API create — the
-      // unique index (migration 022) rejected the duplicate. Re-resolve.
+      // unique (client_id, phone_e164) index rejected the duplicate.
+      // Re-resolve.
       if (isUniqueViolation(createErr)) {
-        const raced = await findExistingContact(db, accountId, sanitized);
+        const raced = await findExistingContact(db, clientId, phoneE164);
         if (raced) {
           contactId = raced.id;
         } else {
@@ -137,16 +123,15 @@ export async function resolveConversationByPhone(
   }
 
   // ---- conversation -------------------------------------------
-  // One conversation per (account, contact) — same convention as the
+  // One conversation per (client, contact) — same convention as the
   // webhook. Order oldest-first and take one row rather than
   // `.maybeSingle()`, which errors on ≥2 rows: if duplicates predate the
-  // unique index (migration 036), we resolve to the canonical survivor
-  // instead of falling through and creating yet another (issue #363).
+  // unique index, we resolve to the canonical survivor instead of
+  // falling through and creating yet another (issue #363).
   const conversationId = await findOrCreateConversationRow(
     db,
-    accountId,
-    contactId,
-    ownerUserId
+    clientId,
+    contactId
   );
 
   return { conversationId, contactId, contactCreated };
@@ -154,20 +139,19 @@ export async function resolveConversationByPhone(
 
 /**
  * Find (oldest-first) or create the single conversation for
- * `(accountId, contactId)`. Handles the unique-index race the same way
+ * `(clientId, contactId)`. Handles the unique-index race the same way
  * the inbound webhook does: on a 23505 from a concurrent create,
  * re-resolve the winning row rather than failing the send.
  */
 async function findOrCreateConversationRow(
   db: SupabaseClient,
-  accountId: string,
-  contactId: string,
-  ownerUserId: string
+  clientId: string,
+  contactId: string
 ): Promise<string> {
   const { data: existing, error: findErr } = await db
     .from('conversations')
     .select('id')
-    .eq('account_id', accountId)
+    .eq('client_id', clientId)
     .eq('contact_id', contactId)
     .order('created_at', { ascending: true })
     .limit(1);
@@ -184,8 +168,7 @@ async function findOrCreateConversationRow(
   const { data: newConv, error: convErr } = await db
     .from('conversations')
     .insert({
-      account_id: accountId,
-      user_id: ownerUserId,
+      client_id: clientId,
       contact_id: contactId,
     })
     .select('id')
@@ -196,7 +179,7 @@ async function findOrCreateConversationRow(
       const { data: raced } = await db
         .from('conversations')
         .select('id')
-        .eq('account_id', accountId)
+        .eq('client_id', clientId)
         .eq('contact_id', contactId)
         .order('created_at', { ascending: true })
         .limit(1);

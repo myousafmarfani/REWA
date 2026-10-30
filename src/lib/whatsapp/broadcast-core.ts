@@ -151,7 +151,7 @@ export async function createBroadcast(
       rejected++;
       continue;
     }
-    const { id } = await findOrCreateContact(db, accountId, auditUserId, {
+    const { id } = await findOrCreateContact(db, accountId, {
       phone: sanitized,
     });
     resolved.push({

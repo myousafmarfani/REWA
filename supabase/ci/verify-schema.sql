@@ -9,40 +9,70 @@
 -- into a silent no-op with a green checkmark.
 --
 -- Keep this thin. It is a smoke test for "did the migrations actually
--- build the schema", not a spec of it — asserting every column here
+-- build the rewa schema", not a spec of it — asserting every column here
 -- would just be the migrations restated in a second place, drifting.
+--
+-- MEMORY entry 19: the wacrm baseline (001–039) was retired to
+-- supabase/migrations/_wacrm_retired/ and is NOT replayed. The five rewa
+-- migrations are the authoritative chain, so assert rewa objects only —
+-- no whatsapp_config / accounts / broadcasts / flows / automations /
+-- deals / chat-media / flow-media.
 DO $$
+DECLARE
+  missing text[] := ARRAY[]::text[];
+  t text;
 BEGIN
-  -- The core tables, from 001.
-  IF to_regclass('public.messages') IS NULL THEN
-    RAISE EXCEPTION 'public.messages is missing — migrations did not apply';
-  END IF;
-  IF to_regclass('public.whatsapp_config') IS NULL THEN
-    RAISE EXCEPTION 'public.whatsapp_config is missing — migrations did not apply';
+  -- Every rewa table. A missing entry means the migration that creates
+  -- it either did not run or silently no-op'd on a typo.
+  FOREACH t IN ARRAY ARRAY[
+    'clients',
+    'client_config',
+    'users',
+    'contacts',
+    'campaigns',
+    'message_templates',
+    'campaign_contacts',
+    'conversations',
+    'messages',
+    'lead_score_history',
+    'property_embeddings',
+    'contact_imports',
+    'push_subscriptions'
+  ]
+  LOOP
+    IF to_regclass('public.' || t) IS NULL THEN
+      missing := missing || t;
+    END IF;
+  END LOOP;
+
+  IF array_length(missing, 1) > 0 THEN
+    RAISE EXCEPTION 'missing rewa table(s): % — migrations did not apply', array_to_string(missing, ', ');
   END IF;
 
-  -- Supabase provides the storage schema; migrations 016/020/023 write
-  -- to it. If it is absent the bucket migrations silently accomplish
+  -- The pgvector retrieval RPC the agent depends on for grounded facts
+  -- (MEMORY entry 8).
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc
+    WHERE proname = 'match_property_embeddings'
+      AND pronamespace = 'public'::regnamespace
+  ) THEN
+    RAISE EXCEPTION 'function match_property_embeddings is missing — migrations did not apply';
+  END IF;
+
+  -- Supabase provides the storage schema; the scoring migration writes
+  -- to it. If it is absent the bucket migration silently accomplishes
   -- nothing, which is precisely the case a plain "no errors" run hides.
   IF to_regclass('storage.buckets') IS NULL THEN
     RAISE EXCEPTION
-      'storage.buckets is missing — the storage schema was not available when the bucket migrations ran';
+      'storage.buckets is missing — the storage schema was not available when the bucket migration ran';
   END IF;
 
   -- Buckets are UPSERTed, so their absence means the INSERT never ran.
-  IF NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'chat-media') THEN
-    RAISE EXCEPTION 'the chat-media bucket row was not created (migration 023)';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'flow-media') THEN
-    RAISE EXCEPTION 'the flow-media bucket row was not created (migration 016)';
+  IF NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'contacts-exports') THEN
+    RAISE EXCEPTION 'the contacts-exports bucket row was not created (scoring spec 5)';
   END IF;
 
-  -- Account scoping (017) is load-bearing for every RLS policy.
-  IF to_regclass('public.accounts') IS NULL THEN
-    RAISE EXCEPTION 'public.accounts is missing — migration 017 did not apply';
-  END IF;
-
-  RAISE NOTICE 'schema verification passed';
+  RAISE NOTICE 'rewa schema verification passed';
 END
 $$;
 

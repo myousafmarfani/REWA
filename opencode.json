@@ -1,0 +1,74 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "edit": "ask",
+    "bash": "ask"
+  },
+  "agent": {
+    "domain-strategist": {
+      "description": "Reviews specs and feature ideas for real-estate market fit, customer pain-point accuracy, and product philosophy alignment before implementation. Read-only — no code, no file edits. Invoke with @domain-strategist during spec drafting in plan mode. Must load real-estate-outreach-domain skill.",
+      "mode": "subagent",
+      "tools": {
+        "write": false,
+        "edit": false
+      }
+    },
+    "compliance-reviewer": {
+      "description": "Reviews any spec or code touching WhatsApp message sending, templates, opt-out, rate-limiting, or the 24-hour window rule. Read-only — no code, no file edits. Mandatory before sending-spec implementation begins. Must load outreach-compliance skill.",
+      "mode": "subagent",
+      "tools": {
+        "write": false,
+        "edit": false
+      }
+    },
+    "spec-writer": {
+      "description": "Drafts and refines spec files in /specs following Spec-Driven Development conventions. Operates in plan mode only — no implementation. Must read MEMORY.md and AGENTS.md before drafting any spec. References depends_on ordering from MEMORY.md entry 14.",
+      "mode": "subagent",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": false
+      }
+    },
+    "backend-builder": {
+      "description": "Implements Supabase schema migrations, contact cleaning logic, WhatsApp sending services, Inngest job queue, and lead scoring logic against an approved spec. Must not implement anything without an approved spec in /specs. Must load contact-cleaning-rules skill before any cleaning work and client-delivery-models skill before any schema work.",
+      "mode": "subagent"
+    },
+    "agent-architect": {
+      "description": "Designs and implements the AI-native agent layer: Agents SDK tool definitions, pgvector retrieval pipeline, guardrails logic, persona configuration, human_controlled gate, hot lead escalation, and structured output schemas. Must load ai-agent-design-patterns skill first. Never implements draft-and-approve — the agent is autonomous.",
+      "mode": "subagent"
+    },
+    "qa-reviewer": {
+      "description": "Reviews implemented code against its originating spec file before commit. Read-only — flags gaps and mismatches, does not fix them. Checks: does the implementation match the spec exactly? Are all MEMORY.md constraints honoured? Are guardrails and RLS present where required?",
+      "mode": "subagent",
+      "tools": {
+        "write": false,
+        "edit": false
+      }
+    }
+  },
+  "mcp": {
+    "supabase": {
+      "type": "remote",
+      "url": "https://mcp.supabase.com/mcp?project_ref=nwlprcswsgobtdjttssu&read_only=true&features=docs%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions",
+      "enabled": true
+    },
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {file:./.secrets/github-pat}"
+      }
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true,
+      "headers": {
+        "CONTEXT7_API_KEY": "{file:./.secrets/context7-api-key}"
+      }
+    }
+  }
+}

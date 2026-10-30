@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag } from '@/types';
+import type { Tag } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -54,14 +54,38 @@ import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
+import { LeadScoreBadge } from '@/components/rewa/lead-score-badge';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { useTranslations } from 'next-intl';
 
 const PAGE_SIZE = 25;
 
-interface ContactWithTags extends Contact {
-  tags?: Tag[];
+/**
+ * A row of the rewa `public.contacts` table. The live column names are
+ * `full_name` / `phone_e164` — NOT the wacrm-era `name` / `phone`
+ * (see specs/1-data-model-spec.md). The edit form consumes the same
+ * shape (`ContactFormContact`).
+ */
+interface ContactRow {
+  id: string;
+  full_name: string | null;
+  phone_e164: string;
+  email: string | null;
+  lead_score: string;
+  pipeline_stage: string;
+  created_at: string;
+}
+
+/** Display name: fall back to the number when no name was imported. */
+function displayName(contact: ContactRow): string {
+  return contact.full_name?.trim() || contact.phone_e164;
+}
+
+/** `new_lead` → `New lead`; unknown values render as-is. */
+function stageLabel(stage: string): string {
+  const text = stage.replace(/_/g, ' ').trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : stage;
 }
 
 export default function ContactsPage() {
@@ -70,7 +94,7 @@ export default function ContactsPage() {
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
 
-  const [contacts, setContacts] = useState<ContactWithTags[]>([]);
+  const [contacts, setContacts] = useState<ContactRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -80,14 +104,13 @@ export default function ContactsPage() {
 
   // Modals
   const [formOpen, setFormOpen] = useState(false);
-  const [editContact, setEditContact] = useState<Contact | null>(null);
-  const [editContactTags, setEditContactTags] = useState<ContactTag[]>([]);
+  const [editContact, setEditContact] = useState<ContactRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ContactRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // Bulk selection (page-scoped — only the loaded rows are selectable)
@@ -130,7 +153,7 @@ export default function ContactsPage() {
     const to = from + PAGE_SIZE - 1;
     const term = search.trim();
 
-    let contactRows: Contact[];
+    let contactRows: ContactRow[];
     let count: number;
 
     if (selectedTagIds.length > 0) {
@@ -150,19 +173,24 @@ export default function ContactsPage() {
         setLoading(false);
         return;
       }
-      const rows = (data ?? []) as { contact: Contact; total_count: number }[];
+      const rows = (data ?? []) as { contact: ContactRow; total_count: number }[];
       contactRows = rows.map((r) => r.contact);
       count = rows.length > 0 ? Number(rows[0].total_count) : 0;
     } else {
       let query = supabase
         .from('contacts')
-        .select('*', { count: 'exact' })
+        .select(
+          'id, full_name, phone_e164, email, lead_score, pipeline_stage, created_at',
+          { count: 'exact' }
+        )
         .order('created_at', { ascending: false })
         .range(from, to);
 
       if (term) {
         const like = `%${term}%`;
-        query = query.or(`name.ilike.${like},phone.ilike.${like},email.ilike.${like}`);
+        query = query.or(
+          `full_name.ilike.${like},phone_e164.ilike.${like},email.ilike.${like}`
+        );
       }
 
       const { data, count: exactCount, error } = await query;
@@ -178,36 +206,9 @@ export default function ContactsPage() {
 
     setTotalCount(count);
 
-    if (contactRows.length === 0) {
-      setContacts([]);
-      setLoading(false);
-      return;
-    }
-
-    // Fetch tags for these contacts
-    const contactIds = contactRows.map((c) => c.id);
-    const { data: contactTags } = await supabase
-      .from('contact_tags')
-      .select('contact_id, tag_id')
-      .in('contact_id', contactIds);
-    if (seq !== fetchSeq.current) return; // superseded by a newer fetch
-
-    const tagsByContact: Record<string, string[]> = {};
-    contactTags?.forEach((ct) => {
-      if (!tagsByContact[ct.contact_id]) tagsByContact[ct.contact_id] = [];
-      tagsByContact[ct.contact_id].push(ct.tag_id);
-    });
-
-    const enriched: ContactWithTags[] = contactRows.map((c) => ({
-      ...c,
-      tags: (tagsByContact[c.id] ?? [])
-        .map((tid) => tagsMap[tid])
-        .filter(Boolean),
-    }));
-
-    setContacts(enriched);
+    setContacts(contactRows);
     setLoading(false);
-  }, [supabase, page, search, selectedTagIds, tagsMap, t]);
+  }, [supabase, page, search, selectedTagIds, t]);
 
   // Load-once-on-mount-ish data fetches. Each setter inside runs
   // inside an async promise completion (Supabase await), not
@@ -225,17 +226,11 @@ export default function ContactsPage() {
 
   function openAddForm() {
     setEditContact(null);
-    setEditContactTags([]);
     setFormOpen(true);
   }
 
-  async function openEditForm(contact: Contact) {
-    const { data } = await supabase
-      .from('contact_tags')
-      .select('*')
-      .eq('contact_id', contact.id);
+  function openEditForm(contact: ContactRow) {
     setEditContact(contact);
-    setEditContactTags(data ?? []);
     setFormOpen(true);
   }
 
@@ -244,7 +239,7 @@ export default function ContactsPage() {
     setDetailOpen(true);
   }
 
-  function confirmDelete(contact: Contact) {
+  function confirmDelete(contact: ContactRow) {
     setDeleteTarget(contact);
     setDeleteConfirmOpen(true);
   }
@@ -544,8 +539,8 @@ export default function ContactsPage() {
               <TableHead className="text-muted-foreground">{t('tableColumns.name')}</TableHead>
               <TableHead className="text-muted-foreground">{t('tableColumns.phone')}</TableHead>
               <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.email')}</TableHead>
-              <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.company')}</TableHead>
-              <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.tags')}</TableHead>
+              <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.leadScore')}</TableHead>
+              <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.stage')}</TableHead>
               <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.createdAt')}</TableHead>
               <TableHead className="text-muted-foreground w-12" />
             </TableRow>
@@ -597,45 +592,23 @@ export default function ContactsPage() {
                     <Checkbox
                       checked={selected.has(contact.id)}
                       onCheckedChange={() => toggleSelect(contact.id)}
-                      aria-label={`Select ${contact.name || contact.phone}`}
+                      aria-label={`Select ${displayName(contact)}`}
                     />
                   </TableCell>
                   <TableCell className="text-foreground font-medium">
-                    {contact.name || <span className="text-muted-foreground italic">{t('unnamed')}</span>}
+                    {contact.full_name?.trim() || <span className="text-muted-foreground italic">{t('unnamed')}</span>}
                   </TableCell>
                   <TableCell className="text-muted-foreground font-mono text-xs">
-                    {contact.phone}
+                    {contact.phone_e164}
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden md:table-cell text-sm">
                     {contact.email || <span className="text-muted-foreground">-</span>}
                   </TableCell>
-                  <TableCell className="text-muted-foreground hidden lg:table-cell text-sm">
-                    {contact.company || <span className="text-muted-foreground">-</span>}
+                  <TableCell className="hidden lg:table-cell">
+                    <LeadScoreBadge score={contact.lead_score} />
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex flex-wrap gap-1">
-                      {contact.tags && contact.tags.length > 0 ? (
-                        contact.tags.slice(0, 3).map((tag) => (
-                          <span
-                            key={tag.id}
-                            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
-                            style={{
-                              backgroundColor: tag.color + '20',
-                              color: tag.color,
-                            }}
-                          >
-                            {tag.name}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-muted-foreground text-xs">-</span>
-                      )}
-                      {contact.tags && contact.tags.length > 3 && (
-                        <span className="text-[10px] text-muted-foreground">
-                          +{contact.tags.length - 3}
-                        </span>
-                      )}
-                    </div>
+                  <TableCell className="text-muted-foreground hidden md:table-cell text-sm">
+                    {contact.pipeline_stage ? stageLabel(contact.pipeline_stage) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs hidden lg:table-cell">
                     {new Date(contact.created_at).toLocaleDateString('en-US', {
@@ -734,7 +707,6 @@ export default function ContactsPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         contact={editContact}
-        contactTags={editContactTags}
         onSaved={() => {
           fetchContacts();
           fetchTags();
@@ -774,7 +746,7 @@ export default function ContactsPage() {
           <DialogHeader>
             <DialogTitle className="text-popover-foreground">{t('deleteContactTitle')}</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              {t('deleteContactDesc', { name: deleteTarget?.name || deleteTarget?.phone || '' })}
+              {t('deleteContactDesc', { name: deleteTarget ? displayName(deleteTarget) : '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="bg-popover border-border">

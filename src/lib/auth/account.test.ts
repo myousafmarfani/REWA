@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// getCurrentAccount resolves the caller's account context. The
-// regression this file guards (issue #294): account loading must NOT
-// depend on a PostgREST embedded FK join (`accounts!inner`), because a
-// stale schema cache makes that embed fail hard and blanks the whole
-// context. It must instead read the profile and then the account with
-// two plain point queries.
+// getCurrentAccount resolves the caller's tenant context from the rewa
+// tables (public.users → public.clients). The regression this file
+// guards (issue #294): account loading must NOT depend on a PostgREST
+// embedded FK join (`clients!inner`), because a stale schema cache makes
+// that embed fail hard and blanks the whole context. It must instead
+// read the users row, then the client, with two plain point queries.
 
 // ------------------------------------------------------------
 // Chainable Supabase query-builder mock. Each `.from(table)` hands back
@@ -66,24 +66,20 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
 }));
 
-const { getCurrentAccount, UnauthorizedError, ForbiddenError } = await import(
-  "./account"
-);
+const { getCurrentAccount, requireRole, UnauthorizedError, ForbiddenError } =
+  await import("./account");
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
 describe("getCurrentAccount", () => {
-  it("resolves context via a plain accounts lookup, not an embedded join", async () => {
+  it("resolves context via plain users + clients lookups, not an embedded join", async () => {
     const { client, calls } = makeClient({
       user: { id: "user-1" },
       byTable: {
-        profiles: {
-          data: { account_id: "acct-1", account_role: "owner" },
-          error: null,
-        },
-        accounts: { data: { id: "acct-1", name: "Acme" }, error: null },
+        users: { data: { client_id: "acct-1", role: "owner" }, error: null },
+        clients: { data: { id: "acct-1", name: "Acme" }, error: null },
       },
     });
     createClient.mockReturnValue(client);
@@ -97,12 +93,12 @@ describe("getCurrentAccount", () => {
       account: { id: "acct-1", name: "Acme" },
     });
 
-    // Two queries: profiles by user_id, then accounts by id. Neither
-    // selects an embedded relationship — the regression guard.
-    expect(calls.map((c) => c.table)).toEqual(["profiles", "accounts"]);
-    expect(calls[0].columns).not.toMatch(/accounts!/);
-    expect(calls[0].eqArgs).toEqual([["user_id", "user-1"]]);
-    expect(calls[1].columns).not.toMatch(/accounts!/);
+    // Two queries: users by id, then clients by id. Neither selects an
+    // embedded relationship — the regression guard.
+    expect(calls.map((c) => c.table)).toEqual(["users", "clients"]);
+    expect(calls[0].columns).not.toMatch(/clients!/);
+    expect(calls[0].eqArgs).toEqual([["id", "user-1"]]);
+    expect(calls[1].columns).not.toMatch(/clients!/);
     expect(calls[1].eqArgs).toEqual([["id", "acct-1"]]);
   });
 
@@ -112,30 +108,11 @@ describe("getCurrentAccount", () => {
     await expect(getCurrentAccount()).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
-  it("maps a profiles query error to 'Could not load account context'", async () => {
+  it("maps a users query error to 'Could not load account context'", async () => {
     const { client } = makeClient({
       user: { id: "user-1" },
       byTable: {
-        profiles: { data: null, error: { code: "PGRST200" } },
-      },
-    });
-    createClient.mockReturnValue(client);
-    await expect(getCurrentAccount()).rejects.toThrow(
-      "Could not load account context",
-    );
-  });
-
-  it("maps an accounts query error to 'Could not load account context'", async () => {
-    // The exact #294 shape if the embed were still in play, but now on
-    // the decoupled accounts lookup: profile resolves, account read errors.
-    const { client } = makeClient({
-      user: { id: "user-1" },
-      byTable: {
-        profiles: {
-          data: { account_id: "acct-1", account_role: "admin" },
-          error: null,
-        },
-        accounts: { data: null, error: { code: "PGRST200" } },
+        users: { data: null, error: { code: "PGRST200" } },
       },
     });
     createClient.mockReturnValue(client);
@@ -144,33 +121,88 @@ describe("getCurrentAccount", () => {
     expect(err.message).toBe("Could not load account context");
   });
 
-  it("rejects a profile not linked to an account", async () => {
+  it("maps a clients query error to 'Could not load account context'", async () => {
+    // The exact #294 shape if the embed were still in play, but now on
+    // the decoupled clients lookup: users resolves, client read errors.
     const { client } = makeClient({
       user: { id: "user-1" },
       byTable: {
-        profiles: { data: { account_id: null, account_role: null }, error: null },
+        users: { data: { client_id: "acct-1", role: "admin" }, error: null },
+        clients: { data: null, error: { code: "PGRST200" } },
+      },
+    });
+    createClient.mockReturnValue(client);
+    const err = await getCurrentAccount().catch((e) => e);
+    expect(err).toBeInstanceOf(ForbiddenError);
+    expect(err.message).toBe("Could not load account context");
+  });
+
+  it("rejects a users row not linked to a client", async () => {
+    const { client } = makeClient({
+      user: { id: "user-1" },
+      byTable: {
+        users: { data: { client_id: null, role: null }, error: null },
       },
     });
     createClient.mockReturnValue(client);
     await expect(getCurrentAccount()).rejects.toThrow(
-      "Profile is not linked to an account",
+      "User is not linked to a client",
     );
   });
 
-  it("rejects an account_id that resolves to no readable account", async () => {
+  it("rejects a client_id that resolves to no readable client", async () => {
     const { client } = makeClient({
       user: { id: "user-1" },
       byTable: {
-        profiles: {
-          data: { account_id: "acct-1", account_role: "viewer" },
-          error: null,
-        },
-        accounts: { data: null, error: null },
+        users: { data: { client_id: "acct-1", role: "agent" }, error: null },
+        clients: { data: null, error: null },
       },
     });
     createClient.mockReturnValue(client);
     await expect(getCurrentAccount()).rejects.toThrow(
-      "Profile is not linked to an account",
+      "User is not linked to a client",
     );
+  });
+
+  it("rejects an unrecognized role value", async () => {
+    const { client } = makeClient({
+      user: { id: "user-1" },
+      byTable: {
+        users: { data: { client_id: "acct-1", role: "superuser" }, error: null },
+      },
+    });
+    createClient.mockReturnValue(client);
+    const err = await getCurrentAccount().catch((e) => e);
+    expect(err).toBeInstanceOf(ForbiddenError);
+    expect(err.message).toBe("Unknown role: superuser");
+  });
+});
+
+describe("requireRole", () => {
+  it("returns the context when the caller meets the minimum role", async () => {
+    const { client } = makeClient({
+      user: { id: "user-1" },
+      byTable: {
+        users: { data: { client_id: "acct-1", role: "admin" }, error: null },
+        clients: { data: { id: "acct-1", name: "Acme" }, error: null },
+      },
+    });
+    createClient.mockReturnValue(client);
+    const ctx = await requireRole("agent");
+    expect(ctx.role).toBe("admin");
+  });
+
+  it("throws ForbiddenError when the caller is below the minimum role", async () => {
+    const { client } = makeClient({
+      user: { id: "user-1" },
+      byTable: {
+        users: { data: { client_id: "acct-1", role: "agent" }, error: null },
+        clients: { data: { id: "acct-1", name: "Acme" }, error: null },
+      },
+    });
+    createClient.mockReturnValue(client);
+    const err = await requireRole("admin").catch((e) => e);
+    expect(err).toBeInstanceOf(ForbiddenError);
+    expect(err.message).toContain("'admin' role");
   });
 });

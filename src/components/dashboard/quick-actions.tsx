@@ -1,7 +1,7 @@
 "use client"
 
 import Link from 'next/link'
-import { UserPlus, Briefcase, Radio, Zap } from 'lucide-react'
+import { UserPlus, GitBranch, Radio, Building2 } from 'lucide-react'
 import type { ComponentType } from 'react'
 
 import { useTranslations } from 'next-intl'
@@ -19,9 +19,9 @@ interface Action {
 
 const ACTIONS: Action[] = [
   { labelKey: 'newContact', href: '/contacts', icon: UserPlus, tint: 'text-primary' },
-  { labelKey: 'newDeal', href: '/pipelines', icon: Briefcase, tint: 'text-blue-400' },
-  { labelKey: 'newBroadcast', href: '/broadcasts/new', icon: Radio, tint: 'text-amber-400' },
-  { labelKey: 'newAutomation', href: '/automations/new', icon: Zap, tint: 'text-primary' },
+  { labelKey: 'pipeline', href: '/pipeline', icon: GitBranch, tint: 'text-blue-400' },
+  { labelKey: 'newCampaign', href: '/campaigns/new', icon: Radio, tint: 'text-amber-400' },
+  { labelKey: 'properties', href: '/settings/properties', icon: Building2, tint: 'text-primary' },
 ]
 
 export function QuickActions() {

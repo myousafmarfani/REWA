@@ -6,11 +6,11 @@ import { normalizePhone, phonesMatch } from "@/lib/whatsapp/phone-utils";
  * manual contact form, and CSV import so all paths agree on what
  * "same number" means (issue #212).
  *
- * The canonical key is `normalizePhone` (digits-only) — the same form
- * the DB stores in the generated `contacts.phone_normalized` column
- * and enforces unique per account. `phonesMatch` adds trunk-prefix
- * tolerance (last-8-digit match) for the softer "possible duplicate"
- * surfaces.
+ * The canonical key is `normalizePhone` (digits-only). On the rewa
+ * schema the stored number is `contacts.phone_e164`, unique per
+ * `client_id` (there is no wacrm-era `phone` column). `phonesMatch` adds
+ * trunk-prefix tolerance (last-8-digit match) for the softer "possible
+ * duplicate" surfaces.
  */
 
 /** Canonical de-dup key for a phone string (digits only). */
@@ -26,11 +26,19 @@ export interface ExistingContact {
   [key: string]: unknown;
 }
 
+/** Shape of the rewa `contacts` columns this lookup selects. */
+interface ContactPhoneRow {
+  id: string;
+  full_name: string | null;
+  phone_e164: string;
+}
+
 /**
- * Find an existing contact in `accountId` whose phone matches `phone`,
- * or null. Pre-filters in SQL by the last-8-digit suffix (so we don't
- * pull every contact), then applies the strict `phonesMatch` in JS on
- * the small candidate set — the exact approach the webhook has used.
+ * Find an existing contact in `accountId` (the tenant/client id) whose
+ * phone matches `phone`, or null. Pre-filters in SQL by the last-8-digit
+ * suffix (so we don't pull every contact), then applies the strict
+ * `phonesMatch` in JS on the small candidate set — the exact approach the
+ * webhook has used.
  */
 export async function findExistingContact(
   db: SupabaseClient,
@@ -44,15 +52,19 @@ export async function findExistingContact(
 
   const { data, error } = await db
     .from("contacts")
-    .select("*")
-    .eq("account_id", accountId)
-    .like("phone", `%${suffix}`);
+    .select("id, full_name, phone_e164")
+    .eq("client_id", accountId)
+    .like("phone_e164", `%${suffix}`);
 
   if (error || !data) return null;
 
-  return (
-    (data as ExistingContact[]).find((c) => phonesMatch(c.phone, phone)) ?? null
+  const match = (data as ContactPhoneRow[]).find((c) =>
+    phonesMatch(c.phone_e164, phone),
   );
+  // Preserve the { phone, name } shape the callers already consume.
+  return match
+    ? { id: match.id, phone: match.phone_e164, name: match.full_name }
+    : null;
 }
 
 /**

@@ -68,8 +68,10 @@ describe("dedupeByPhone", () => {
 
 describe("findExistingContact", () => {
   // Minimal SupabaseClient stub: resolves the .from().select().eq().like()
-  // chain to a fixed candidate set.
-  function stubDb(rows: Array<{ id: string; phone: string }>): SupabaseClient {
+  // chain to a fixed candidate set of rewa `contacts` rows.
+  function stubDb(
+    rows: Array<{ id: string; phone_e164: string; full_name?: string | null }>,
+  ): SupabaseClient {
     const builder = {
       select: () => builder,
       eq: () => builder,
@@ -79,19 +81,19 @@ describe("findExistingContact", () => {
   }
 
   it("returns a trunk-variant match via phonesMatch", async () => {
-    const db = stubDb([{ id: "c1", phone: "37063949836" }]);
+    const db = stubDb([{ id: "c1", phone_e164: "37063949836" }]);
     const hit = await findExistingContact(db, "acct", "+370 063 949 836");
     expect(hit?.id).toBe("c1");
   });
 
   it("returns null when no candidate matches", async () => {
-    const db = stubDb([{ id: "c1", phone: "15559999999" }]);
+    const db = stubDb([{ id: "c1", phone_e164: "15559999999" }]);
     const hit = await findExistingContact(db, "acct", "+1 555-123-4567");
     expect(hit).toBeNull();
   });
 
   it("returns null for an empty phone without querying", async () => {
-    const db = stubDb([{ id: "c1", phone: "15551234567" }]);
+    const db = stubDb([{ id: "c1", phone_e164: "15551234567" }]);
     expect(await findExistingContact(db, "acct", "   ")).toBeNull();
   });
 });

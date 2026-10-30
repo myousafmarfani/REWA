@@ -1,21 +1,19 @@
 // ============================================================
-// GET   /api/v1/contacts/{id} — read a contact  (scope: contacts:read)
-// PATCH /api/v1/contacts/{id} — update a contact (scope: contacts:write)
+// GET   /api/v1/contacts/{id} — read a contact  (scope contacts:read)
+// PATCH /api/v1/contacts/{id} — update a contact (scope contacts:write)
 //
-// Both are account-scoped: a contact belonging to another account
-// returns 404 (never 403 — don't reveal it exists elsewhere).
-// PATCH updates only the fields present in the body; pass `tags` (an
-// array of tag names) to replace the contact's tags.
+// Both are client-scoped: a contact belonging to another client returns
+// 404 (never 403 — don't reveal it exists elsewhere).
+//
+// rewa schema (MEMORY.md entry 19): the request field `name` maps onto
+// `contacts.full_name`, rows are scoped by `client_id`, and the retired
+// wacrm `company` / `tags` fields are rejected rather than silently
+// ignored. PATCH updates only the fields present in the body.
 // ============================================================
 
 import { requireApiKey } from '@/lib/auth/api-context';
 import { ok, fail, toApiErrorResponse } from '@/lib/api/v1/respond';
-import {
-  getContactById,
-  setContactTags,
-  resolveAuditUserId,
-  ContactError,
-} from '@/lib/api/v1/contacts';
+import { getContactById, ContactError } from '@/lib/api/v1/contacts';
 
 export async function GET(
   request: Request,
@@ -48,7 +46,15 @@ export async function PATCH(
       return fail('bad_request', 'Request body must be a JSON object', 400);
     }
 
-    // Verify the contact is in this account before mutating anything.
+    // Retired wacrm fields — surface the rejection instead of silently
+    // dropping the caller's intended write.
+    for (const retired of ['company', 'tags'] as const) {
+      if (retired in body) {
+        return fail('bad_request', `'${retired}' is not supported`, 400);
+      }
+    }
+
+    // Verify the contact is in this client before mutating anything.
     const existing = await getContactById(ctx.supabase, ctx.accountId, id);
     if (!existing) return fail('not_found', 'Contact not found', 404);
 
@@ -57,13 +63,18 @@ export async function PATCH(
     // untouched); `null` clears it, a string sets it, and any other
     // type is a 400 rather than a silently-ignored no-op.
     const updates: Record<string, unknown> = {};
-    for (const field of ['name', 'email', 'company'] as const) {
-      if (!(field in body)) continue;
-      const value = body[field];
+    const fields = [['name', 'full_name'], ['email', 'email']] as const;
+    for (const [requestField, column] of fields) {
+      if (!(requestField in body)) continue;
+      const value = body[requestField];
       if (value === null || typeof value === 'string') {
-        updates[field] = value;
+        updates[column] = value;
       } else {
-        return fail('bad_request', `'${field}' must be a string or null`, 400);
+        return fail(
+          'bad_request',
+          `'${requestField}' must be a string or null`,
+          400
+        );
       }
     }
 
@@ -73,22 +84,11 @@ export async function PATCH(
         .from('contacts')
         .update(updates)
         .eq('id', id)
-        .eq('account_id', ctx.accountId);
+        .eq('client_id', ctx.accountId);
       if (error) {
         console.error('[api/v1/contacts] update error:', error);
         return fail('internal', 'Failed to update contact', 500);
       }
-    }
-
-    if (Array.isArray(body.tags)) {
-      const auditUserId = await resolveAuditUserId(ctx.supabase, ctx.accountId);
-      await setContactTags(
-        ctx.supabase,
-        ctx.accountId,
-        auditUserId,
-        id,
-        body.tags.filter((t): t is string => typeof t === 'string')
-      );
     }
 
     const contact = await getContactById(ctx.supabase, ctx.accountId, id);

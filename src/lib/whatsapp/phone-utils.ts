@@ -9,6 +9,19 @@ export function sanitizePhoneForMeta(phone: string): string {
 }
 
 /**
+ * Canonical `contacts.phone_e164` value: digits only with a leading
+ * `+`. Meta payloads (and `sanitizePhoneForMeta`) are digits-only, but
+ * rewa stores E.164 WITH the `+` — see the inbound webhook, which does
+ * `+${message.from}`. Use this whenever a number is WRITTEN to
+ * `contacts.phone_e164`; use `sanitizePhoneForMeta` only when building
+ * a Meta API payload.
+ */
+export function toE164(phone: string): string {
+  const digits = sanitizePhoneForMeta(phone)
+  return digits ? `+${digits}` : ''
+}
+
+/**
  * Normalize phone number by removing all non-digit characters.
  * Used for comparing phone numbers in different formats.
  */

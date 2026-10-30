@@ -9,10 +9,10 @@ import { SendMessageError } from './send-message';
 // (like/maybeSingle/single) resolve to configured data; the builder
 // itself is thenable so an awaited `update().eq()` resolves cleanly.
 // ------------------------------------------------------------
-type ContactRow = { id: string; phone: string; name?: string | null };
+type ContactRow = { id: string; phone_e164: string; full_name?: string | null };
 
 interface Script {
-  config?: { user_id: string } | null; // whatsapp_config.maybeSingle
+  config?: { wa_phone_number_id: string; wa_access_token: string } | null; // client_config.maybeSingle
   contactCandidates?: ContactRow[]; // contacts .like (same every call)
   /** Per-call `.like` results — overrides contactCandidates. Lets a
    *  test simulate "miss, then hit" for the unique-race path. */
@@ -29,7 +29,12 @@ interface Script {
   insertConversationError?: { code?: string } | null;
 }
 
-function makeDb(script: Script): SupabaseClient {
+type InsertRecord = { table: string; values: Record<string, unknown> };
+
+function makeDb(
+  script: Script,
+  recorder?: { inserts?: InsertRecord[] }
+): SupabaseClient {
   let table = '';
   let mode: 'select' | 'insert' | 'update' = 'select';
   let likeCalls = 0;
@@ -37,8 +42,9 @@ function makeDb(script: Script): SupabaseClient {
 
   const builder: Record<string, unknown> = {
     select: () => builder,
-    insert: () => {
+    insert: (values: Record<string, unknown>) => {
       mode = 'insert';
+      recorder?.inserts?.push({ table, values });
       return builder;
     },
     update: () => {
@@ -66,7 +72,7 @@ function makeDb(script: Script): SupabaseClient {
       return Promise.resolve({ data, error: null });
     },
     maybeSingle: () => {
-      if (table === 'whatsapp_config')
+      if (table === 'client_config')
         return Promise.resolve({ data: script.config ?? null, error: null });
       return Promise.resolve({ data: null, error: null });
     },
@@ -121,7 +127,7 @@ describe('resolveConversationByPhone', () => {
     ).rejects.toBeInstanceOf(SendMessageError);
   });
 
-  it('fails with whatsapp_not_configured when no config owner exists', async () => {
+  it('fails with whatsapp_not_configured when client_config has no WhatsApp credentials', async () => {
     const db = makeDb({ config: null });
     await resolveConversationByPhone(db, 'acct', '+14155550123').catch(
       (e: SendMessageError) => {
@@ -136,8 +142,8 @@ describe('resolveConversationByPhone', () => {
 
   it('returns the existing contact + conversation without creating', async () => {
     const db = makeDb({
-      config: { user_id: 'owner-1' },
-      contactCandidates: [{ id: 'c1', phone: '14155550123' }],
+      config: { wa_phone_number_id: 'pn1', wa_access_token: 'tok' },
+      contactCandidates: [{ id: 'c1', phone_e164: '14155550123' }],
       existingConversation: { id: 'cv1' },
     });
     const res = await resolveConversationByPhone(
@@ -153,13 +159,17 @@ describe('resolveConversationByPhone', () => {
   });
 
   it('creates contact + conversation when none exist', async () => {
-    const db = makeDb({
-      config: { user_id: 'owner-1' },
-      contactCandidates: [],
-      insertedContactId: 'c2',
-      existingConversation: null,
-      insertedConversationId: 'cv2',
-    });
+    const recorder: { inserts?: InsertRecord[] } = { inserts: [] };
+    const db = makeDb(
+      {
+        config: { wa_phone_number_id: 'pn1', wa_access_token: 'tok' },
+        contactCandidates: [],
+        insertedContactId: 'c2',
+        existingConversation: null,
+        insertedConversationId: 'cv2',
+      },
+      recorder
+    );
     const res = await resolveConversationByPhone(
       db,
       'acct',
@@ -171,6 +181,20 @@ describe('resolveConversationByPhone', () => {
       contactId: 'c2',
       contactCreated: true,
     });
+
+    // The writes must use the rewa schema — client_id / phone_e164 /
+    // full_name on contacts, client_id on conversations — never the
+    // wacrm-era account_id / user_id / phone / name (MEMORY.md 19).
+    const inserts = recorder.inserts ?? [];
+    expect(inserts.find((i) => i.table === 'contacts')?.values).toEqual({
+      client_id: 'acct',
+      phone_e164: '+14155550199',
+      full_name: 'Jane',
+    });
+    expect(inserts.find((i) => i.table === 'conversations')?.values).toEqual({
+      client_id: 'acct',
+      contact_id: 'c2',
+    });
   });
 
   it('re-resolves an existing contact when the insert loses a unique race', async () => {
@@ -178,8 +202,8 @@ describe('resolveConversationByPhone', () => {
     // 23505 unique violation, and the post-race re-lookup now returns
     // the row a concurrent writer created.
     const db = makeDb({
-      config: { user_id: 'owner-1' },
-      contactCandidatesByCall: [[], [{ id: 'c-raced', phone: '14155550123' }]],
+      config: { wa_phone_number_id: 'pn1', wa_access_token: 'tok' },
+      contactCandidatesByCall: [[], [{ id: 'c-raced', phone_e164: '14155550123' }]],
       insertContactError: { code: '23505' },
       existingConversation: { id: 'cv-raced' },
     });
@@ -195,8 +219,8 @@ describe('resolveConversationByPhone', () => {
     // post-race re-lookup returns the winning conversation — no duplicate
     // conversation is created (issue #363).
     const db = makeDb({
-      config: { user_id: 'owner-1' },
-      contactCandidates: [{ id: 'c1', phone: '14155550123' }],
+      config: { wa_phone_number_id: 'pn1', wa_access_token: 'tok' },
+      contactCandidates: [{ id: 'c1', phone_e164: '14155550123' }],
       existingConversationByCall: [null, { id: 'cv-raced' }],
       insertConversationError: { code: '23505' },
     });

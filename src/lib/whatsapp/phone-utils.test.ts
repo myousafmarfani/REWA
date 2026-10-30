@@ -6,6 +6,7 @@ import {
   phoneVariants,
   phonesMatch,
   sanitizePhoneForMeta,
+  toE164,
 } from "./phone-utils";
 
 describe("sanitizePhoneForMeta", () => {
@@ -24,6 +25,24 @@ describe("sanitizePhoneForMeta", () => {
   it("is idempotent on already-sanitized input", () => {
     const cleaned = "14155551212";
     expect(sanitizePhoneForMeta(cleaned)).toBe(cleaned);
+  });
+});
+
+describe("toE164", () => {
+  it("adds the leading + that contacts.phone_e164 requires", () => {
+    expect(toE164("+1 (415) 555-1212")).toBe("+14155551212");
+    expect(toE164("14155551212")).toBe("+14155551212");
+    expect(toE164("14155551212")).toBe(toE164("+14155551212"));
+  });
+
+  it("returns an empty string when there are no digits", () => {
+    expect(toE164("")).toBe("");
+    expect(toE164("abc")).toBe("");
+  });
+
+  it("round-trips through sanitizePhoneForMeta", () => {
+    expect(toE164("+370 639 49836")).toBe("+37063949836");
+    expect(sanitizePhoneForMeta(toE164("+370 639 49836"))).toBe("37063949836");
   });
 });
 

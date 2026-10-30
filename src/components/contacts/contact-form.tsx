@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
-import { addContactTag, deleteContactTag } from '@/lib/contacts/tag-api';
 import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag } from '@/types';
 import {
   findExistingContact,
   isExactMatch,
@@ -23,15 +22,25 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+
+/**
+ * The rewa `public.contacts` fields the manual form edits. `phone_e164`
+ * is the live column — there is no wacrm-era `name` / `phone` / `company`
+ * (see specs/1-data-model-spec.md).
+ */
+export interface ContactFormContact {
+  id: string;
+  full_name: string | null;
+  phone_e164: string;
+  email: string | null;
+}
 
 interface ContactFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  contact?: Contact | null;
-  contactTags?: ContactTag[];
+  contact?: ContactFormContact | null;
   onSaved: () => void;
   /** Open an existing contact's detail view — used by the duplicate
    *  notice to jump to the contact that already owns this number. */
@@ -42,7 +51,6 @@ export function ContactForm({
   open,
   onOpenChange,
   contact,
-  contactTags = [],
   onSaved,
   onViewExisting,
 }: ContactFormProps) {
@@ -54,31 +62,23 @@ export function ContactForm({
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [company, setCompany] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Duplicate-phone detection for NEW contacts. `exact` (same digits)
   // hard-blocks the save; a fuzzy trunk-variant match only warns. The
-  // DB unique index (migration 022) is the real backstop — this is the
-  // friendly heads-up before we get there.
+  // DB unique index `(client_id, phone_e164)` is the real backstop — this
+  // is the friendly heads-up before we get there.
   const [dupMatch, setDupMatch] = useState<
     { contact: ExistingContact; exact: boolean } | null
   >(null);
   const [checkingDup, setCheckingDup] = useState(false);
 
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [loadingTags, setLoadingTags] = useState(false);
-
   useEffect(() => {
     if (open) {
-      setName(contact?.name ?? '');
-      setPhone(contact?.phone ?? '');
+      setName(contact?.full_name ?? '');
+      setPhone(contact?.phone_e164 ?? '');
       setEmail(contact?.email ?? '');
-      setCompany(contact?.company ?? '');
-      setSelectedTagIds(contactTags.map((ct) => ct.tag_id));
       setDupMatch(null);
-      fetchTags();
     }
   }, [open, contact]);
 
@@ -104,24 +104,6 @@ export function ContactForm({
     }
   }
 
-  async function fetchTags() {
-    setLoadingTags(true);
-    const { data } = await supabase
-      .from('tags')
-      .select('*')
-      .order('name');
-    if (data) setTags(data);
-    setLoadingTags(false);
-  }
-
-  function toggleTag(tagId: string) {
-    setSelectedTagIds((prev) =>
-      prev.includes(tagId)
-        ? prev.filter((id) => id !== tagId)
-        : [...prev, tagId]
-    );
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -129,6 +111,16 @@ export function ContactForm({
       toast.error(t('phoneRequired'));
       return;
     }
+
+    // Normalize to E.164 before we touch the DB — `phone_e164` is the
+    // canonical, unique-per-client key. International format is required
+    // (the import pipeline is equally strict; MEMORY.md entry 7).
+    const parsed = parsePhoneNumberFromString(phone.trim());
+    if (!parsed || !parsed.isValid()) {
+      toast.error(t('phoneInvalid'));
+      return;
+    }
+    const e164 = parsed.format('E.164');
 
     // Hard-block an exact duplicate on create (the DB unique index is
     // the real backstop; this avoids a round-trip + a raw error toast).
@@ -147,58 +139,36 @@ export function ContactForm({
       if (!user) throw new Error('Not authenticated');
       if (!accountId) throw new Error('Your profile is not linked to an account.');
 
-      let contactId = contact?.id;
-
-      if (isEdit && contactId) {
+      if (isEdit && contact?.id) {
         const { error } = await supabase
           .from('contacts')
           .update({
-            name: name.trim() || null,
-            phone: phone.trim(),
+            full_name: name.trim() || null,
+            phone_e164: e164,
             email: email.trim() || null,
-            company: company.trim() || null,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', contactId);
+          .eq('id', contact.id);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
-          .from('contacts')
-          .insert({
-            user_id: user.id,
-            account_id: accountId,
-            name: name.trim() || null,
-            phone: phone.trim(),
-            email: email.trim() || null,
-            company: company.trim() || null,
-          })
-          .select('id')
-          .single();
+        const { error } = await supabase.from('contacts').insert({
+          client_id: accountId,
+          full_name: name.trim() || null,
+          phone_e164: e164,
+          email: email.trim() || null,
+          // A hand-entered contact is an explicit, sourced opt-in.
+          consent_source: 'manual',
+          consent_at: new Date().toISOString(),
+        });
         if (error) throw error;
-        contactId = data.id;
-      }
-
-      // Sync tags
-      if (contactId) {
-        const existingTagIds = new Set(contactTags.map((tag) => tag.tag_id));
-        const desiredTagIds = new Set(selectedTagIds);
-        const toRemove = [...existingTagIds].filter((id) => !desiredTagIds.has(id));
-        const toAdd = [...desiredTagIds].filter((id) => !existingTagIds.has(id));
-
-        for (const tagId of toRemove) {
-          await deleteContactTag(contactId, tagId);
-        }
-        for (const tagId of toAdd) {
-          await addContactTag(contactId, tagId);
-        }
       }
 
       toast.success(isEdit ? t('toastSuccessEdit') : t('toastSuccessAdd'));
       onOpenChange(false);
       onSaved();
     } catch (err: unknown) {
-      // The unique index (migration 022) rejects a duplicate phone that
-      // slipped past the on-blur check (race, or a format that
+      // The unique index `(client_id, phone_e164)` rejects a duplicate
+      // phone that slipped past the on-blur check (race, or a format that
       // normalizes equal). Surface it as the friendly duplicate notice
       // and, for new contacts, point the user at the existing record.
       if (isUniqueViolation(err)) {
@@ -308,58 +278,6 @@ export function ContactForm({
               placeholder={t('emailPlaceholder')}
               className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="cf-company" className="text-muted-foreground">
-              {t('companyLabel')}
-            </Label>
-            <Input
-              id="cf-company"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder={t('companyPlaceholder')}
-              className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-muted-foreground">{t('tagsLabel')}</Label>
-            {loadingTags ? (
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Loader2 className="size-3 animate-spin" />
-                {t('loadingTags')}
-              </div>
-            ) : tags.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {t('noTagsAvailable')}
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((tag) => {
-                  const selected = selectedTagIds.includes(tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => toggleTag(tag.id)}
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors cursor-pointer ${
-                        selected
-                          ? 'ring-2 ring-primary ring-offset-1 ring-offset-border'
-                          : 'opacity-60 hover:opacity-100'
-                      }`}
-                      style={{
-                        backgroundColor: tag.color + '20',
-                        color: tag.color,
-                        borderColor: tag.color,
-                      }}
-                    >
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
           <DialogFooter className="bg-popover border-border">
