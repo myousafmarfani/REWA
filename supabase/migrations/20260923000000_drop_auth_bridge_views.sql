@@ -20,8 +20,19 @@
 -- ============================================================
 
 -- Drop the INSTEAD OF triggers before their functions and the views.
-DROP TRIGGER IF EXISTS accounts_update_shim ON public.accounts;
-DROP TRIGGER IF EXISTS profiles_update_shim ON public.profiles;
+DO $$
+BEGIN
+  -- Remove accounts trigger only when the relation exists.
+  IF to_regclass('public.accounts') IS NOT NULL THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS accounts_update_shim ON public.accounts';
+  END IF;
+
+  -- Remove profiles trigger only when the relation exists.
+  IF to_regclass('public.profiles') IS NOT NULL THEN
+    EXECUTE 'DROP TRIGGER IF EXISTS profiles_update_shim ON public.profiles';
+  END IF;
+END
+$$;
 
 DROP FUNCTION IF EXISTS public.accounts_update_shim();
 DROP FUNCTION IF EXISTS public.profiles_update_shim();
