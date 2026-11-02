@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Vendored minified opus-recorder encoder worker (served statically).
     "public/opus/**",
+    // Trigger.dev local build cache — generated `.mjs` bundles, never
+    // linted (recreated every time `npx trigger.dev dev` runs).
+    ".trigger/**",
   ]),
 ]);
 

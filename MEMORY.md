@@ -264,3 +264,49 @@ that explicitly references the one it replaces.
     answered with a fallback reply instead of opting out — tracked as
     residual; it is not fixable by widening the keyword list alone.
 ---
+
+21. Embedding task types + calibrated retrieval threshold (supersedes
+    the 0.75 similarity figure in specs/3-agent-core-spec.md; measured
+    2026-10-31).
+    - Model: Google `gemini-embedding-001` (default; overridable via
+      EMBEDDING_MODEL), 1536 dimensions pinned with
+      `providerOptions.google.outputDimensionality` to match
+      property_embeddings.embedding vector(1536). @ai-sdk/google 4.0.76
+      forwards `taskType` and `outputDimensionality` through
+      `providerOptions.google` — verified in the provider docs and the
+      installed adapter, not assumed.
+    - Task types are mandatory and asymmetric: every stored property
+      chunk is embedded with `RETRIEVAL_DOCUMENT` (ingest route and
+      scripts), every inbound question with `RETRIEVAL_QUERY`. Without
+      them the two distributions plateau below any usable threshold.
+    - Measured with the SAMPLE property chunks (4) and 11 probe
+      questions via `npx tsx scripts/probe-similarity.ts` (cosine, the
+      same metric as pgvector `<=>`). Lowest on-topic score for the
+      expected chunk: 0.6065 ("Can I book a viewing this weekend?" →
+      overview). Highest best-chunk score for an off-topic query:
+      0.5582 ("Do you sell cars?" → pricing). Relevant scores by query:
+        price of the 2BR                → pricing 0.6712
+        2-bedroom cost                  → pricing 0.6594
+        payment plan                    → payment_plan 0.7045
+        down payment on booking         → payment_plan 0.6537
+        amenities                       → amenities 0.6902
+        gym and infinity pool           → amenities 0.6524
+        property located                → overview 0.6381
+        viewing this weekend            → overview 0.6065
+        tell me about the 2BR           → overview 0.6557
+        weather in Dubai (off-topic)    → max 0.5268
+        do you sell cars (off-topic)    → max 0.5582
+    - Chosen default threshold: 0.58 — the midpoint between the two
+      populations (0.6065 / 0.5582), keeping equal margin on both
+      sides. Configurable via RETRIEVAL_SIMILARITY_THRESHOLD; an
+      unset or non-numeric value falls back to 0.58. The old 0.75
+      figure is retired: it was a spec assumption, never reachable by
+      the measured embedding distribution, and it silently emptied the
+      agent's context block.
+    - Stored and query vectors now share one serialiser
+      (src/lib/pgvector.ts, `toVectorLiteral`) that emits the bracketed
+      pgvector literal `[0.1,0.2,...]`. The ingest route previously
+      emitted a bare `0.1,0.2,...`, which Postgres rejects with
+      `invalid input syntax for type vector`; a regression test covers
+      the route.
+---

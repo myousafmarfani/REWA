@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { embedText } from '@/lib/agent/retrieval'
+import { toVectorLiteral } from '@/lib/pgvector'
 
 export const maxDuration = 60
 
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
   const results: Array<{ chunk_type: string; status: string; error?: string }> = []
   for (const chunk of body.chunks) {
     try {
-      const embedding = await embedText(chunk.content)
+      const embedding = await embedText(chunk.content, 'RETRIEVAL_DOCUMENT')
       const { error } = await supabase
         .from('property_embeddings')
         .upsert(
@@ -57,10 +58,9 @@ export async function POST(request: Request) {
             property_id: body.property_id,
             chunk_type: chunk.chunk_type,
             content: chunk.content,
-            embedding: embedding.reduce((acc, v) => {
-              const n = parseFloat(v.toFixed(6))
-              return acc ? `${acc},${n}` : `${n}`
-            }, ''),
+            // pgvector text literal, e.g. "[0.1,0.2,...]" — the same
+            // helper retrieval.ts uses for the query vector.
+            embedding: toVectorLiteral(embedding),
             metadata: {},
           },
           { onConflict: 'client_id,property_id,chunk_type' },

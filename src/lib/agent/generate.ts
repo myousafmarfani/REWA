@@ -54,7 +54,7 @@ export function getModel() {
       return openai(modelId || 'gpt-4o');
     case 'google':
     default:
-      return google(modelId || 'gemini-1.5-flash');
+      return google(modelId || 'gemini-2.5-flash');
   }
 }
 

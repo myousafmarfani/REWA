@@ -1,73 +1,1400 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "permission": {
-    "edit": "ask",
-    "bash": "ask"
-  },
-  "agent": {
+  "permissions": [
+    {
+      "action": "edit",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "shell",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "external_directory",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "read",
+      "resource": "*.env",
+      "effect": "ask"
+    },
+    {
+      "action": "read",
+      "resource": "*.env.*",
+      "effect": "ask"
+    },
+    {
+      "action": "read",
+      "resource": "*.env.example",
+      "effect": "allow"
+    },
+    {
+      "action": "read",
+      "resource": ".secrets/*",
+      "effect": "deny"
+    },
+    {
+      "action": "grep",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "github_*",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "supabase_*",
+      "resource": "*",
+      "effect": "ask"
+    }
+  ],
+  "agents": {
     "domain-strategist": {
-      "description": "Reviews specs and feature ideas for real-estate market fit, customer pain-point accuracy, and product philosophy alignment before implementation. Read-only — no code, no file edits. Invoke with @domain-strategist during spec drafting in plan mode. Must load real-estate-outreach-domain skill.",
+      "description": "Reviews specs and feature ideas for real-estate market fit, customer pain-point accuracy, and product philosophy alignment before implementation. Read-only. Invoke with @domain-strategist during spec drafting in plan mode. Must load real-estate-outreach-domain skill.",
       "mode": "subagent",
-      "tools": {
-        "write": false,
-        "edit": false
-      }
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "skill",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "execute",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "context7_*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "context7",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "context7:*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "github_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "supabase_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "github",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "supabase",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "github:*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "supabase:*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        }
+      ]
     },
     "compliance-reviewer": {
-      "description": "Reviews any spec or code touching WhatsApp message sending, templates, opt-out, rate-limiting, or the 24-hour window rule. Read-only — no code, no file edits. Mandatory before sending-spec implementation begins. Must load outreach-compliance skill.",
+      "description": "Reviews any spec or code touching WhatsApp message sending, templates, opt-out, rate-limiting, or the 24-hour window rule. Read-only. Mandatory before sending-spec implementation begins. Must load outreach-compliance skill.",
       "mode": "subagent",
-      "tools": {
-        "write": false,
-        "edit": false
-      }
-    },
-    "spec-writer": {
-      "description": "Drafts and refines spec files in /specs following Spec-Driven Development conventions. Operates in plan mode only — no implementation. Must read MEMORY.md and AGENTS.md before drafting any spec. References depends_on ordering from MEMORY.md entry 14.",
-      "mode": "subagent",
-      "tools": {
-        "write": true,
-        "edit": true,
-        "bash": false
-      }
-    },
-    "backend-builder": {
-      "description": "Implements Supabase schema migrations, contact cleaning logic, WhatsApp sending services, Inngest job queue, and lead scoring logic against an approved spec. Must not implement anything without an approved spec in /specs. Must load contact-cleaning-rules skill before any cleaning work and client-delivery-models skill before any schema work.",
-      "mode": "subagent"
-    },
-    "agent-architect": {
-      "description": "Designs and implements the AI-native agent layer: Agents SDK tool definitions, pgvector retrieval pipeline, guardrails logic, persona configuration, human_controlled gate, hot lead escalation, and structured output schemas. Must load ai-agent-design-patterns skill first. Never implements draft-and-approve — the agent is autonomous.",
-      "mode": "subagent"
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "skill",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "execute",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "context7_*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "context7",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "context7:*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "github_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "supabase_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "github",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "supabase",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "github:*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "supabase:*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        }
+      ]
     },
     "qa-reviewer": {
-      "description": "Reviews implemented code against its originating spec file before commit. Read-only — flags gaps and mismatches, does not fix them. Checks: does the implementation match the spec exactly? Are all MEMORY.md constraints honoured? Are guardrails and RLS present where required?",
+      "description": "Reviews implemented code against its originating spec file before commit. Read-only: flags gaps and mismatches, does not fix them. Checks: does the implementation match the spec exactly? Are all MEMORY.md constraints honoured? Are guardrails and RLS present where required?",
       "mode": "subagent",
-      "tools": {
-        "write": false,
-        "edit": false
-      }
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "skill",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "execute",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "context7_*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "context7",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "context7:*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "github_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "supabase_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "github",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "supabase",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "github:*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "supabase:*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "spec-writer": {
+      "description": "Drafts and refines spec files exclusively inside /specs following Spec-Driven Development conventions. Operates in plan mode only. Must read MEMORY.md and AGENTS.md before drafting any spec. References depends_on ordering from MEMORY.md entry 14.",
+      "mode": "subagent",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "skill",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "execute",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "context7_*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "context7",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "context7:*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "specs/*",
+          "effect": "allow"
+        },
+        {
+          "action": "edit",
+          "resource": "/home/myousafmarfani/projects/rewa/specs/*",
+          "effect": "allow"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "github_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "supabase_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "github",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "supabase",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "github:*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "supabase:*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "backend-builder": {
+      "description": "Implements Supabase schema migrations, contact cleaning logic, WhatsApp sending services, Trigger.dev job workflows, and lead scoring logic against an approved spec. Must not implement anything without an approved spec in /specs. Must load contact-cleaning-rules skill before any cleaning work and client-delivery-models skill before any schema work.",
+      "mode": "subagent",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "skill",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "execute",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "context7_*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "context7",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "context7:*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "github_*",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "supabase_*",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "github",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "supabase",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "github:*",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "supabase:*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "agent-architect": {
+      "description": "Designs and implements the AI-native agent layer using Vercel AI SDK: tool definitions, pgvector retrieval pipeline, guardrails logic, persona configuration, human_controlled gate, hot lead escalation, and structured output schemas. Must load ai-agent-design-patterns skill first. Never implements draft-and-approve; the agent is autonomous.",
+      "mode": "subagent",
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "skill",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "execute",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "context7_*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "context7",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "context7:*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "github_*",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "supabase_*",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "github",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "supabase",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "github:*",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "supabase:*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "plan": {
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "skill",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "execute",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "context7_*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "context7",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "context7:*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "question",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "explore",
+          "effect": "allow"
+        },
+        {
+          "action": "subagent",
+          "resource": "domain-strategist",
+          "effect": "allow"
+        },
+        {
+          "action": "subagent",
+          "resource": "compliance-reviewer",
+          "effect": "allow"
+        },
+        {
+          "action": "subagent",
+          "resource": "qa-reviewer",
+          "effect": "allow"
+        },
+        {
+          "action": "subagent",
+          "resource": "spec-writer",
+          "effect": "allow"
+        },
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "/home/myousafmarfani/.opencode/plan/*",
+          "effect": "allow"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "/home/myousafmarfani/.opencode/plan/*",
+          "effect": "allow"
+        },
+        {
+          "action": "github_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "supabase_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "github",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "supabase",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "github:*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "supabase:*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "explore": {
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "skill",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "execute",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "context7_*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "context7",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "context7:*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "github_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "supabase_*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "github",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "supabase",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "github:*",
+          "effect": "deny"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "supabase:*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "general": {
+      "permissions": [
+        {
+          "action": "*",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "read",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "glob",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "grep",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "skill",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "execute",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "context7_*",
+          "resource": "*",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "context7",
+          "effect": "allow"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "context7:*",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        },
+        {
+          "action": "question",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "external_directory",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "github_*",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "supabase_*",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "github",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_list_mcp_resources",
+          "resource": "supabase",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "github:*",
+          "effect": "ask"
+        },
+        {
+          "action": "opencode_read_mcp_resource",
+          "resource": "supabase:*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.*",
+          "effect": "ask"
+        },
+        {
+          "action": "read",
+          "resource": "*.env.example",
+          "effect": "allow"
+        },
+        {
+          "action": "read",
+          "resource": ".secrets/*",
+          "effect": "deny"
+        }
+      ]
     }
   },
   "mcp": {
-    "supabase": {
-      "type": "remote",
-      "url": "https://mcp.supabase.com/mcp?project_ref=nwlprcswsgobtdjttssu&read_only=true&features=docs%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions",
-      "enabled": true
-    },
-    "github": {
-      "type": "remote",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "enabled": true,
-      "oauth": false,
-      "headers": {
-        "Authorization": "Bearer {file:./.secrets/github-pat}"
-      }
-    },
-    "context7": {
-      "type": "remote",
-      "url": "https://mcp.context7.com/mcp",
-      "enabled": true,
-      "headers": {
-        "CONTEXT7_API_KEY": "{file:./.secrets/context7-api-key}"
+    "servers": {
+      "supabase": {
+        "type": "remote",
+        "url": "https://mcp.supabase.com/mcp?project_ref=nwlprcswsgobtdjttssu&read_only=true&features=docs%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions",
+        "disabled": false
+      },
+      "github": {
+        "type": "remote",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "oauth": false,
+        "disabled": false,
+        "headers": {
+          "Authorization": "Bearer {file:.secrets/github-pat}"
+        }
+      },
+      "context7": {
+        "type": "remote",
+        "url": "https://mcp.context7.com/mcp",
+        "disabled": false,
+        "headers": {
+          "CONTEXT7_API_KEY": "{file:./.secrets/context7-api-key}"
+        }
       }
     }
   }

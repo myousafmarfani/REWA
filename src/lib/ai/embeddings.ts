@@ -1,6 +1,7 @@
 import { AiError } from './types'
 import { aiRequestTimeoutMs } from './defaults'
 import { providerHttpError, toNetworkError } from './providers/shared'
+import { toVectorLiteral } from '../pgvector'
 
 // ============================================================
 // Embeddings (OpenAI-compatible).
@@ -27,11 +28,8 @@ interface EmbeddingResponse {
 }
 
 /** Format a vector for a pgvector column / RPC param: `[0.1,0.2,...]`.
- *  PostgREST casts this text literal to `vector`; a raw JS array does
- *  not cast reliably. */
-export function toVectorLiteral(embedding: number[]): string {
-  return `[${embedding.join(',')}]`
-}
+ *  Shared with the property-retrieval path — see src/lib/pgvector.ts. */
+export { toVectorLiteral };
 
 /**
  * Embed a list of strings, preserving input order. Batched; throws
